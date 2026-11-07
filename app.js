@@ -2,7 +2,7 @@
 /* 設備維修手冊工作臺
  * 純前端離線應用：手冊元資料與文件均存於本機 IndexedDB。
  */
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.1.0';
 const $ = (s, el = document) => el.querySelector(s);
 
 /* =========================================================
@@ -34,7 +34,7 @@ function txDone(t) {
   return new Promise((res, rej) => {
     t.oncomplete = () => res();
     t.onerror = () => rej(t.error);
-    t.onabort = () => rej(t.error || new Error('操作被中止'));
+    t.onabort = () => rej(t.error || new Error('transaction aborted'));
   });
 }
 const store = {
@@ -75,6 +75,9 @@ function setManuals(list) {
  * 工具函數
  * ========================================================= */
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+/** 按當前語言排序 */
+let collator = new Intl.Collator(LANG);
+const cmp = (a, b) => collator.compare(a, b);
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const fmtSize = (n) => n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(0) + ' KB' : n < 1073741824 ? (n / 1048576).toFixed(1) + ' MB' : (n / 1073741824).toFixed(2) + ' GB';
 const fmtDate = (t) => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
@@ -115,9 +118,9 @@ function fileKind(m) {
 function fileBadge(m) {
   const k = fileKind(m);
   if (k === 'pdf') return ['pdf', 'PDF'];
-  if (k === 'image') return ['img', '圖片'];
+  if (k === 'image') return ['img', t('ftype.image')];
   const ext = (m.fileName || '').split('.').pop().toUpperCase().slice(0, 4);
-  return ['', ext || '文件'];
+  return ['', ext || t('ftype.file')];
 }
 
 let toastTimer;
@@ -160,7 +163,7 @@ function search(query) {
     }
     if (score) out.push({ m, score, hits });
   }
-  out.sort((a, b) => b.score - a.score || a.m.title.localeCompare(b.m.title, 'zh-Hant'));
+  out.sort((a, b) => b.score - a.score || cmp(a.m.title, b.m.title));
   return out;
 }
 
@@ -176,10 +179,10 @@ function cardHTML(m, hits, best) {
       ${sub ? `<div class="card-sub">${sub}</div>` : ''}
     </div>
     <div class="card-actions">
-      <button type="button" class="icon-btn star${favs.has(m.id) ? ' on' : ''}" data-star="${m.id}" aria-label="收藏">
+      <button type="button" class="icon-btn star${favs.has(m.id) ? ' on' : ''}" data-star="${m.id}" aria-label="${esc(t('card.fav'))}">
         <svg class="ico" viewBox="0 0 24 24"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg>
       </button>
-      <button type="button" class="icon-btn" data-edit="${m.id}" aria-label="編輯">
+      <button type="button" class="icon-btn" data-edit="${m.id}" aria-label="${esc(t('card.edit'))}">
         <svg class="ico" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>
       </button>
     </div>
@@ -197,7 +200,7 @@ function renderSearch() {
   if (!raw.trim()) {
     results.innerHTML = '';
     home.hidden = false;
-    meta.textContent = manuals.length ? `手冊庫共 ${manuals.length} 份手冊` : '';
+    meta.textContent = manuals.length ? t('search.total', { n: manuals.length }) : '';
     renderHome();
     return;
   }
@@ -206,20 +209,20 @@ function renderSearch() {
   if (!res.length) {
     meta.textContent = '';
     results.innerHTML = `<div class="empty">
-      <p>找不到型號「${esc(raw.trim())}」的手冊</p>
-      <p class="muted">試試只輸入型號的一部分，或檢查是否有錯字。</p>
-      <button type="button" class="btn primary" data-add-model="${esc(raw.trim())}">為此型號新增手冊</button>
+      <p>${esc(t('search.none', { q: raw.trim() }))}</p>
+      <p class="muted">${esc(t('search.noneHint'))}</p>
+      <button type="button" class="btn primary" data-add-model="${esc(raw.trim())}">${esc(t('search.addForModel'))}</button>
     </div>`;
     return;
   }
   const exact = res.filter((r) => r.score === 100).length;
-  meta.textContent = exact ? `精確匹配 ${exact} 份` + (res.length > exact ? `，相近 ${res.length - exact} 份` : '') : `找到 ${res.length} 份相近的手冊`;
+  meta.textContent = !exact ? t('search.near', { n: res.length }) : res.length > exact ? t('search.exactNear', { n: exact, m: res.length - exact }) : t('search.exact', { n: exact });
   results.innerHTML = res.slice(0, 100).map((r, i) => cardHTML(r.m, r.hits, i === 0 && r.score === 100)).join('');
 }
 
 function renderHome() {
   $('#emptyLib').hidden = manuals.length > 0;
-  const favItems = manuals.filter((m) => favs.has(m.id)).sort((a, b) => a.title.localeCompare(b.title, 'zh-Hant'));
+  const favItems = manuals.filter((m) => favs.has(m.id)).sort((a, b) => cmp(a.title, b.title));
   $('#favWrap').hidden = !favItems.length;
   $('#favList').innerHTML = favItems.map((m) => cardHTML(m)).join('');
   const rec = recent.map((id) => byId.get(id)).filter(Boolean).slice(0, 8);
@@ -235,17 +238,17 @@ function fillSelect(sel, values, allLabel) {
   sel.innerHTML = `<option value="">${allLabel}</option>` + values.map((v) => `<option>${esc(v)}</option>`).join('');
   sel.value = values.includes(cur) ? cur : '';
 }
-const uniq = (key) => [...new Set(manuals.map((m) => m[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+const uniq = (key) => [...new Set(manuals.map((m) => m[key]).filter(Boolean))].sort(cmp);
 
 function renderLibrary() {
-  fillSelect($('#fltBrand'), uniq('brand'), '全部品牌');
-  fillSelect($('#fltDept'), uniq('dept'), '全部科室');
+  fillSelect($('#fltBrand'), uniq('brand'), t('lib.allBrands'));
+  fillSelect($('#fltDept'), uniq('dept'), t('lib.allDepts'));
   const b = $('#fltBrand').value, d = $('#fltDept').value, sort = $('#fltSort').value;
   let list = manuals.filter((m) => (!b || m.brand === b) && (!d || m.dept === d));
-  list.sort(sort === 'updated' ? (x, y) => y.updatedAt - x.updatedAt : (x, y) => x.title.localeCompare(y.title, 'zh-Hant'));
-  $('#libMeta').textContent = `共 ${list.length} 份` + (list.length !== manuals.length ? `（全部 ${manuals.length} 份）` : '');
+  list.sort(sort === 'updated' ? (x, y) => y.updatedAt - x.updatedAt : (x, y) => cmp(x.title, y.title));
+  $('#libMeta').textContent = list.length !== manuals.length ? t('lib.countOf', { n: list.length, total: manuals.length }) : t('lib.count', { n: list.length });
   $('#libList').innerHTML = list.length ? list.map((m) => cardHTML(m)).join('')
-    : `<div class="empty"><p>還沒有手冊</p><p class="muted">點右下角「新增手冊」開始。</p></div>`;
+    : `<div class="empty"><p>${esc(t('lib.empty1'))}</p><p class="muted">${esc(t('lib.empty2'))}</p></div>`;
   for (const [id, key] of [['brandList', 'brand'], ['deviceList', 'device'], ['deptList', 'dept']]) {
     $('#' + id).innerHTML = uniq(key).map((v) => `<option value="${esc(v)}">`).join('');
   }
@@ -256,35 +259,35 @@ function renderLibrary() {
  * ========================================================= */
 async function renderSettings() {
   const total = manuals.reduce((s, m) => s + (m.size || 0), 0);
-  const rows = [['手冊數量', manuals.length + ' 份'], ['手冊佔用', fmtSize(total)]];
+  const rows = [[t('set.count'), t('set.countVal', { n: manuals.length })], [t('set.size'), fmtSize(total)]];
   if (navigator.storage?.estimate) {
     try {
       const e = await navigator.storage.estimate();
-      rows.push(['瀏覽器可用配額', fmtSize(Math.max(0, e.quota - e.usage))]);
+      rows.push([t('set.quota'), fmtSize(Math.max(0, e.quota - e.usage))]);
     } catch { /* ignore */ }
   }
   if (navigator.storage?.persisted) {
     try {
       const p = await navigator.storage.persisted();
-      rows.push(['防止系統自動清理', p ? '已開啟' : '未開啟（建議安裝到主畫面）']);
+      rows.push([t('set.persist'), p ? t('set.persistOn') : t('set.persistOff')]);
     } catch { /* ignore */ }
   }
   const last = await store.get('lastBackup');
-  rows.push(['上次備份', last ? fmtDate(last) : '從未']);
+  rows.push([t('set.lastBackup'), last ? fmtDate(last) : t('set.never')]);
   $('#storageInfo').innerHTML = rows.map(([k, v]) => `<div><span>${k}</span><span>${esc(v)}</span></div>`).join('');
-  $('#versionInfo').textContent = `版本 ${APP_VERSION}`;
+  $('#versionInfo').textContent = t('set.version', { v: APP_VERSION });
 }
 
 /* =========================================================
  * 視圖切換
  * ========================================================= */
-const titles = { search: '維修手冊工作臺', library: '手冊庫', settings: '設置' };
+const titleKeys = { search: 'app.title', library: 'tab.library', settings: 'tab.settings' };
 let currentView = 'search';
 function showView(v) {
   currentView = v;
   document.querySelectorAll('.view').forEach((el) => el.classList.toggle('active', el.id === 'view-' + v));
   document.querySelectorAll('.tab').forEach((el) => el.classList.toggle('active', el.dataset.view === v));
-  $('#pageTitle').textContent = titles[v];
+  $('#pageTitle').textContent = t(titleKeys[v]);
   refresh();
   window.scrollTo(0, 0);
 }
@@ -333,14 +336,14 @@ function openEditor(m, preset = {}) {
   pickedFile = null;
   const f = $('#editForm');
   f.querySelectorAll('.invalid').forEach((x) => x.classList.remove('invalid'));
-  $('#editTitle').textContent = m ? '編輯手冊' : '新增手冊';
+  $('#editTitle').textContent = m ? t('edit.edit') : t('edit.new');
   $('#fModels').value = (m ? m.models : splitModels(preset.models)).join(', ');
   $('#fTitle').value = m?.title || '';
   $('#fBrand').value = m?.brand || '';
   $('#fDevice').value = m?.device || '';
   $('#fDept').value = m?.dept || '';
   $('#fNotes').value = m?.notes || '';
-  $('#fileInfo').textContent = m ? `${m.fileName}（${fmtSize(m.size)}）— 可重新選擇以替換` : '未選擇（PDF、圖片、Word 等均可）';
+  $('#fileInfo').textContent = m ? t('edit.fileExisting', { name: m.fileName, size: fmtSize(m.size) }) : t('edit.noFile');
   $('#deleteBtn').hidden = !m;
   $('#fileInput').value = '';
   openOverlay($('#editSheet'));
@@ -351,7 +354,7 @@ $('#fileInput').onchange = (e) => {
   const file = e.target.files[0];
   if (!file) return;
   pickedFile = file;
-  $('#fileInfo').textContent = `${file.name}（${fmtSize(file.size)}）`;
+  $('#fileInfo').textContent = `${file.name} · ${fmtSize(file.size)}`;
   $('#fileInput').closest('.field').classList.remove('invalid');
   if (!$('#fTitle').value.trim()) $('#fTitle').placeholder = stripExt(file.name);
   if (!$('#fModels').value.trim()) {
@@ -384,7 +387,7 @@ $('#editForm').onsubmit = async (e) => {
   modelField.classList.toggle('invalid', !models.length);
   if (!editing && !pickedFile) ok = false;
   if (!models.length) ok = false;
-  if (!ok) { toast('請選擇文件並填寫至少一個型號'); return; }
+  if (!ok) { toast(t('edit.required')); return; }
 
   const now = Date.now();
   const base = editing ? { ...editing } : { id: uid(), createdAt: now };
@@ -402,7 +405,7 @@ $('#editForm').onsubmit = async (e) => {
 
   const btn = $('#saveBtn');
   btn.disabled = true;
-  btn.textContent = '保存中…';
+  btn.textContent = t('edit.saving');
   try {
     await store.put(meta, pickedFile);
     withNorm(meta);
@@ -411,21 +414,21 @@ $('#editForm').onsubmit = async (e) => {
     setManuals(list);
     requestPersist();
     closeOverlay();
-    toast(editing ? '已保存修改' : '已新增手冊');
+    toast(editing ? t('edit.saved') : t('edit.added'));
     refresh();
     if (viewerMeta && viewerMeta.id === meta.id) $('#vTitle').textContent = meta.title;
   } catch (err) {
     console.error(err);
-    toast(isQuota(err) ? '存儲空間不足，請刪除部分手冊或清理手機空間' : '保存失敗：' + (err.message || err), 4000);
+    toast(isQuota(err) ? t('edit.quota') : t('edit.saveFail', { e: err.message || err }), 4000);
   } finally {
     btn.disabled = false;
-    btn.textContent = '保存';
+    btn.textContent = t('edit.save');
   }
 };
 
 $('#deleteBtn').onclick = async () => {
   if (!editing) return;
-  if (!confirm(`確定刪除「${editing.title}」？此操作無法撤銷。`)) return;
+  if (!confirm(t('edit.delConfirm', { t: editing.title }))) return;
   const id = editing.id;
   await store.remove(id);
   setManuals(manuals.filter((x) => x.id !== id));
@@ -434,7 +437,7 @@ $('#deleteBtn').onclick = async () => {
   store.set('favs', [...favs]);
   store.set('recent', recent);
   closeOverlay(false, viewerMeta && viewerMeta.id === id ? 2 : 1);
-  toast('已刪除');
+  toast(t('edit.deleted'));
   refresh();
 };
 
@@ -457,7 +460,7 @@ $('#batchInput').onchange = async (e) => {
   let done = 0, failed = 0;
   const added = [];
   for (const file of files) {
-    btn.textContent = `導入中 ${done + failed + 1} / ${files.length}…`;
+    btn.textContent = t('set.batchProgress', { i: done + failed + 1, n: files.length });
     const g = guessFromName(file.name);
     const now = Date.now();
     const meta = { id: uid(), createdAt: now, updatedAt: now, models: g.models, title: g.title, brand: '', device: '', dept: '', notes: '', fileName: file.name, fileType: file.type, size: file.size };
@@ -467,8 +470,8 @@ $('#batchInput').onchange = async (e) => {
   setManuals(manuals.concat(added));
   requestPersist();
   btn.disabled = false;
-  btn.textContent = '選擇多個文件導入';
-  toast(`已導入 ${done} 份` + (failed ? `，失敗 ${failed} 份` : ''), 3000);
+  btn.textContent = t('set.batchBtn');
+  toast(failed ? t('set.batchDoneFail', { n: done, f: failed }) : t('set.batchDone', { n: done }), 3000);
   refresh();
 };
 
@@ -479,10 +482,10 @@ $('#batchInput').onchange = async (e) => {
  * ========================================================= */
 const MAGIC = 'MANLIB1\n';
 $('#exportBtn').onclick = async () => {
-  if (!manuals.length) { toast('手冊庫是空的'); return; }
+  if (!manuals.length) { toast(t('set.exportEmpty')); return; }
   const btn = $('#exportBtn');
   btn.disabled = true;
-  btn.textContent = '打包中…';
+  btn.textContent = t('set.packing');
   try {
     const entries = [];
     const blobs = [];
@@ -499,20 +502,20 @@ $('#exportBtn').onclick = async () => {
     const out = new Blob([MAGIC, len, header, ...blobs], { type: 'application/octet-stream' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(out);
-    a.download = `維修手冊備份_${fmtDate(Date.now())}.manlib`;
+    a.download = `${t('set.backupFile')}_${fmtDate(Date.now())}.manlib`;
     document.body.appendChild(a);
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 60000);
     await store.set('lastBackup', Date.now());
-    toast(`已導出 ${entries.length} 份手冊（${fmtSize(out.size)}），請在「下載」中查看`, 4000);
+    toast(t('set.exportDone', { n: entries.length, size: fmtSize(out.size) }), 4000);
     if (currentView === 'settings') renderSettings();
   } catch (err) {
     console.error(err);
-    toast('導出失敗：' + (err.message || err), 4000);
+    toast(t('set.exportFail', { e: err.message || err }), 4000);
   } finally {
     btn.disabled = false;
-    btn.textContent = '導出備份';
+    btn.textContent = t('set.export');
   }
 };
 
@@ -524,18 +527,18 @@ $('#importInput').onchange = async (e) => {
   const btn = $('#importBtn');
   try {
     const magic = await file.slice(0, 8).text();
-    if (magic !== MAGIC) throw new Error('不是有效的備份文件');
+    if (magic !== MAGIC) throw new Error(t('set.importInvalid'));
     const hlen = parseInt(await file.slice(8, 20).text(), 10);
     const header = JSON.parse(await file.slice(20, 20 + hlen).text());
     const start = 20 + hlen;
     const n = header.entries.length;
     const dup = header.entries.filter((x) => byId.has(x.meta.id)).length;
-    if (!confirm(`備份中有 ${n} 份手冊${dup ? `，其中 ${dup} 份與現有手冊相同，將被覆蓋` : ''}。確定恢復？`)) return;
+    if (!confirm(dup ? t('set.importConfirmDup', { n, d: dup }) : t('set.importConfirm', { n }))) return;
     btn.disabled = true;
     const list = new Map(byId);
     let i = 0;
     for (const ent of header.entries) {
-      btn.textContent = `恢復中 ${++i} / ${n}…`;
+      btn.textContent = t('set.importProgress', { i: ++i, n });
       const meta = ent.meta;
       const blob = file.slice(start + ent.offset, start + ent.offset + ent.size, meta.fileType || 'application/octet-stream');
       // 複製成獨立 Blob，避免依賴原備份文件
@@ -545,14 +548,14 @@ $('#importInput').onchange = async (e) => {
     }
     setManuals([...list.values()]);
     requestPersist();
-    toast(`已恢復 ${n} 份手冊`, 3000);
+    toast(t('set.importDone', { n }), 3000);
     refresh();
   } catch (err) {
     console.error(err);
-    toast(isQuota(err) ? '存儲空間不足，恢復中斷' : '恢復失敗：' + (err.message || err), 4000);
+    toast(isQuota(err) ? t('set.importQuota') : t('set.importFail', { e: err.message || err }), 4000);
   } finally {
     btn.disabled = false;
-    btn.textContent = '從備份恢復';
+    btn.textContent = t('set.import');
   }
 };
 
@@ -579,7 +582,7 @@ async function startScan() {
     detector = new BarcodeDetector();
     scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
   } catch (err) {
-    toast('無法打開相機：' + (err.message || err), 3500);
+    toast(t('scan.camErr', { e: err.message || err }), 3500);
     return;
   }
   const video = $('#scanVideo');
@@ -626,7 +629,7 @@ const vPages = $('#vPages');
 function loadScript(src) {
   return new Promise((res, rej) => {
     const s = document.createElement('script');
-    s.src = src; s.onload = res; s.onerror = () => rej(new Error('載入失敗：' + src));
+    s.src = src; s.onload = res; s.onerror = () => rej(new Error('failed to load ' + src));
     document.head.appendChild(s);
   });
 }
@@ -646,11 +649,11 @@ async function openManual(id) {
   $('#vFindBar').hidden = true;
   $('#vFindResults').hidden = true;
   $('#vFindInput').value = '';
-  vPages.innerHTML = '<div class="vmsg">正在打開…</div>';
+  vPages.innerHTML = `<div class="vmsg">${esc(t('v.opening'))}</div>`;
   openOverlay($('#viewer'), closeViewer);
 
   const blob = await store.file(id);
-  if (!blob) { vPages.innerHTML = '<div class="vmsg">文件不存在或已損壞，請重新上傳。</div>'; return; }
+  if (!blob) { vPages.innerHTML = `<div class="vmsg">${esc(t('v.missing'))}</div>`; return; }
   viewerBlob = blob;
   viewerUrl = URL.createObjectURL(blob);
   const kind = fileKind(m);
@@ -663,8 +666,8 @@ async function openManual(id) {
     else showOtherFile();
   } catch (err) {
     console.error(err);
-    vPages.innerHTML = `<div class="vmsg">無法在應用內顯示此文件（${esc(err.message || err)}）。
-      <br><button type="button" class="btn primary" data-share>用其他應用打開</button></div>`;
+    vPages.innerHTML = `<div class="vmsg">${esc(t('v.cantShow', { e: err.message || err }))}
+      <br><button type="button" class="btn primary" data-share>${esc(t('v.openWith'))}</button></div>`;
   }
 }
 
@@ -684,9 +687,9 @@ function closeViewer() {
 function showOtherFile() {
   const m = viewerMeta;
   vPages.innerHTML = `<div class="vmsg">
-    <p>「${esc(m.fileName)}」（${fmtSize(m.size)}）</p>
-    <p>此類文件需要用手機上的其他應用（如 WPS、Office）打開。</p>
-    <button type="button" class="btn primary" data-share>用其他應用打開</button></div>`;
+    <p>${esc(m.fileName)} · ${fmtSize(m.size)}</p>
+    <p>${esc(t('v.otherNeed'))}</p>
+    <button type="button" class="btn primary" data-share>${esc(t('v.openWith'))}</button></div>`;
 }
 
 async function openImage() {
@@ -716,7 +719,7 @@ async function openPdf() {
     isEvalSupported: false,
   });
   task.onPassword = (cb, reason) => {
-    const pw = prompt(reason === 2 ? '密碼錯誤，請重新輸入：' : '此 PDF 有密碼保護，請輸入密碼：');
+    const pw = prompt(reason === 2 ? t('v.wrongPw') : t('v.password'));
     if (pw === null) task.destroy(); else cb(pw);
   };
   const doc = await task.promise;
@@ -853,7 +856,7 @@ $('#zOut').onclick = () => setZoom(V.zoom / 1.25);
 $('#zFit').onclick = () => setZoom(1, 0, vBody.clientHeight / 3);
 $('#pageInd').onclick = () => {
   if (V.pages.length < 2) return;
-  const v = prompt(`跳到第幾頁？（1 – ${V.pages.length}）`, String(currentPageIndex() + 1));
+  const v = prompt(t('v.jump', { n: V.pages.length }), String(currentPageIndex() + 1));
   const n = parseInt(v, 10);
   if (n >= 1 && n <= V.pages.length) goToPage(n);
 };
@@ -932,27 +935,27 @@ $('#vFindBar').onsubmit = async (e) => {
   const tight = V.findTerm.replace(/\s+/g, '');
   const token = ++V.findToken;
   box.hidden = false;
-  box.innerHTML = '<div class="fr-status">搜索中…</div>';
+  box.innerHTML = `<div class="fr-status">${esc(t('find.searching'))}</div>`;
   const results = [];
   const N = V.doc.numPages;
   for (let n = 1; n <= N; n++) {
     if (token !== V.findToken) return;
-    let t;
-    try { t = await pageText(n); } catch { continue; }
-    let idx = t.low.indexOf(V.findTerm);
+    let pt;
+    try { pt = await pageText(n); } catch { continue; }
+    let idx = pt.low.indexOf(V.findTerm);
     let count = 0, first = idx;
-    while (idx !== -1) { count++; idx = t.low.indexOf(V.findTerm, idx + V.findTerm.length); }
-    if (!count && tight && t.low.replace(/\s+/g, '').includes(tight)) { count = 1; first = -1; }
-    if (count) results.push({ n, count, snippet: snippet(t.str, first, V.findTerm.length) });
+    while (idx !== -1) { count++; idx = pt.low.indexOf(V.findTerm, idx + V.findTerm.length); }
+    if (!count && tight && pt.low.replace(/\s+/g, '').includes(tight)) { count = 1; first = -1; }
+    if (count) results.push({ n, count, snippet: snippet(pt.str, first, V.findTerm.length) });
     if (n % 10 === 0 || n === N) {
-      box.innerHTML = resultsHTML(results) + (n < N ? `<div class="fr-status">已搜索 ${n} / ${N} 頁…</div>` : '');
+      box.innerHTML = resultsHTML(results) + (n < N ? `<div class="fr-status">${esc(t('find.progress', { i: n, n: N }))}</div>` : '');
     }
   }
   if (token !== V.findToken) return;
   if (!results.length) {
-    box.innerHTML = `<div class="fr-status">沒有找到「${esc(term)}」。<br>若手冊是掃描圖片，則無法搜索文字。</div>`;
+    box.innerHTML = `<div class="fr-status">${esc(t('find.none', { q: term }))}<br>${esc(t('find.noneHint'))}</div>`;
   } else {
-    box.innerHTML = `<div class="fr-status">共 ${results.reduce((s, r) => s + r.count, 0)} 處，分佈在 ${results.length} 頁</div>` + resultsHTML(results);
+    box.innerHTML = `<div class="fr-status">${esc(t('find.summary', { c: results.reduce((s, r) => s + r.count, 0), p: results.length }))}</div>` + resultsHTML(results);
   }
   // 已渲染頁面補上高亮
   V.visible.forEach((el) => { if (el._rw) V.doc.getPage(+el.dataset.n).then((p) => drawMarks(el, p)); });
@@ -964,7 +967,7 @@ function snippet(str, idx, len) {
   const clean = (s) => esc(s.replace(/\s+/g, ' '));
   return (a > 0 ? '…' : '') + clean(str.slice(a, idx)) + '<mark>' + clean(str.slice(idx, idx + len)) + '</mark>' + clean(str.slice(idx + len, b)) + (b < str.length ? '…' : '');
 }
-const resultsHTML = (rs) => rs.map((r) => `<button type="button" class="fr" data-page="${r.n}"><b>第 ${r.n} 頁</b>${r.count > 1 ? `<span class="muted">(${r.count} 處)</span> ` : ''}${r.snippet}</button>`).join('');
+const resultsHTML = (rs) => rs.map((r) => `<button type="button" class="fr" data-page="${r.n}"><b>${esc(t('find.page', { n: r.n }))}</b>${r.count > 1 ? `<span class="muted">${esc(t('find.count', { n: r.count }))}</span> ` : ''}${r.snippet}</button>`).join('');
 
 $('#vFindResults').addEventListener('click', (e) => {
   const b = e.target.closest('[data-page]');
@@ -1034,7 +1037,7 @@ async function shareFile() {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  toast('已保存到「下載」，可從通知欄打開');
+  toast(t('v.savedDownload'));
 }
 
 window.addEventListener('resize', () => {
@@ -1083,7 +1086,25 @@ $('#addBtn').onclick = () => openEditor(null);
 /* =========================================================
  * 啟動
  * ========================================================= */
+/* ---------- 語言 ---------- */
+function applyLanguage() {
+  collator = new Intl.Collator(LANG);
+  applyI18n();
+  // 標題同時顯示英文，方便誤選了看不懂的語言時找回來
+  $('#langHeading').textContent = t('set.language') + (LANG === 'en' ? '' : ' · Language');
+  $('#langSelect').value = LANG;
+  $('#pageTitle').textContent = t(titleKeys[currentView]);
+}
+const langSelect = $('#langSelect');
+langSelect.innerHTML = LANGS.map(([code, name]) => `<option value="${code}">${esc(name)}</option>`).join('');
+langSelect.onchange = () => {
+  setLang(langSelect.value, true);
+  applyLanguage();
+  refresh();
+};
+
 async function init() {
+  applyLanguage();
   if ('BarcodeDetector' in window && navigator.mediaDevices?.getUserMedia) {
     $('#scanBtn').hidden = false;
     $('#scanBtn').onclick = startScan;
@@ -1095,7 +1116,7 @@ async function init() {
     favs = new Set(f || []);
   } catch (err) {
     console.error(err);
-    toast('無法打開本機資料庫：' + (err.message || err), 5000);
+    toast(t('db.err', { e: err.message || err }), 5000);
   }
   refresh();
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {

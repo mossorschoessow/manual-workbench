@@ -14,7 +14,7 @@
 <body>
 
 <header class="appbar">
-  <h1 id="pageTitle">維修手冊工作臺</h1>
+  <h1 id="pageTitle" data-i18n="app.title">維修手冊工作臺</h1>
 </header>
 
 <main>
@@ -23,11 +23,11 @@
     <div class="search-wrap">
       <div class="search-box">
         <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <input id="q" type="search" placeholder="輸入設備型號" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="search" aria-label="設備型號">
-        <button id="clearQ" class="icon-btn" type="button" hidden aria-label="清除">
+        <input id="q" type="search" data-i18n-ph="search.ph" data-i18n-aria="search.aria" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="search">
+        <button id="clearQ" class="icon-btn" type="button" hidden data-i18n-aria="search.clear">
           <svg class="ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
         </button>
-        <button id="scanBtn" class="icon-btn" type="button" hidden aria-label="掃描條碼">
+        <button id="scanBtn" class="icon-btn" type="button" hidden data-i18n-aria="search.scan">
           <svg class="ico" viewBox="0 0 24 24"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 12h10"/></svg>
         </button>
       </div>
@@ -38,16 +38,16 @@
 
     <div id="home">
       <div id="emptyLib" class="empty" hidden>
-        <p>手冊庫還是空的。</p>
-        <p class="muted">先到「手冊庫」新增手冊，或在「設置」中批量導入。</p>
-        <button class="btn primary" type="button" data-goto="library">去新增手冊</button>
+        <p data-i18n="home.empty1"></p>
+        <p class="muted" data-i18n="home.empty2"></p>
+        <button class="btn primary" type="button" data-goto="library" data-i18n="home.goAdd"></button>
       </div>
       <div id="favWrap" hidden>
-        <h2 class="section-h">收藏</h2>
+        <h2 class="section-h" data-i18n="home.favs"></h2>
         <div id="favList" class="list"></div>
       </div>
       <div id="recentWrap" hidden>
-        <h2 class="section-h">最近查看</h2>
+        <h2 class="section-h" data-i18n="home.recent"></h2>
         <div id="recentList" class="list"></div>
       </div>
     </div>
@@ -56,55 +56,60 @@
   <!-- ========== 手冊庫 ========== -->
   <section id="view-library" class="view">
     <div class="filters">
-      <select id="fltBrand" aria-label="按品牌篩選"><option value="">全部品牌</option></select>
-      <select id="fltDept" aria-label="按科室篩選"><option value="">全部科室</option></select>
-      <select id="fltSort" aria-label="排序">
-        <option value="title">按標題</option>
-        <option value="updated">最近更新</option>
+      <select id="fltBrand" data-i18n-aria="lib.byBrand"><option value=""></option></select>
+      <select id="fltDept" data-i18n-aria="lib.byDept"><option value=""></option></select>
+      <select id="fltSort" data-i18n-aria="lib.sort">
+        <option value="title" data-i18n="lib.sortTitle"></option>
+        <option value="updated" data-i18n="lib.sortUpdated"></option>
       </select>
     </div>
     <div id="libMeta" class="meta-line"></div>
     <div id="libList" class="list"></div>
     <button class="fab" id="addBtn" type="button">
-      <svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>新增手冊
+      <svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span data-i18n="lib.add"></span>
     </button>
   </section>
 
   <!-- ========== 設置 ========== -->
   <section id="view-settings" class="view">
     <div class="panel">
-      <h2>存儲</h2>
+      <h2 id="langHeading"></h2>
+      <select id="langSelect" class="lang-select" aria-label="Language"></select>
+    </div>
+
+    <div class="panel">
+      <h2 data-i18n="set.storage"></h2>
       <div id="storageInfo" class="kv-list"></div>
     </div>
 
     <div class="panel">
-      <h2>批量導入</h2>
-      <p class="muted">一次選擇多個文件，按文件名自動識別型號：</p>
+      <h2 data-i18n="set.batch"></h2>
+      <p class="muted" data-i18n="set.batchDesc"></p>
       <ul class="rules">
-        <li><code>型號__標題.pdf</code>　例：<code>Dash4000,Dash5000__監護儀維修手冊.pdf</code></li>
-        <li>沒有 <code>__</code> 時，整個文件名作為型號和標題，導入後可再編輯。</li>
+        <li data-i18n-html="set.batchRule1Html"></li>
+        <li data-i18n-html="set.batchRule2Html"></li>
       </ul>
-      <button class="btn primary block" type="button" id="batchBtn">選擇多個文件導入</button>
+      <button class="btn primary block" type="button" id="batchBtn" data-i18n="set.batchBtn"></button>
       <input type="file" id="batchInput" multiple hidden>
     </div>
 
     <div class="panel">
-      <h2>備份與遷移</h2>
-      <p class="muted">把整個手冊庫打包成一個 <code>.manlib</code> 文件，可在另一部手機上恢復。換機或清除瀏覽器資料前務必先備份。</p>
+      <h2 data-i18n="set.backup"></h2>
+      <p class="muted" data-i18n-html="set.backupDescHtml"></p>
       <div class="btn-row">
-        <button class="btn" type="button" id="exportBtn">導出備份</button>
-        <button class="btn" type="button" id="importBtn">從備份恢復</button>
+        <button class="btn" type="button" id="exportBtn" data-i18n="set.export"></button>
+        <button class="btn" type="button" id="importBtn" data-i18n="set.import"></button>
       </div>
       <input type="file" id="importInput" accept=".manlib" hidden>
     </div>
 
     <div class="panel">
-      <h2>使用提示</h2>
+      <h2 data-i18n="set.tips"></h2>
       <ul class="rules">
-        <li>型號查詢忽略大小寫、空格、橫線、斜線，<code>dash-4000</code> 與 <code>DASH 4000</code> 視為相同。</li>
-        <li>型號打錯一兩個字符也能找到相近結果。</li>
-        <li>打開 PDF 後點右上角放大鏡，可在手冊內搜索故障代碼，並高亮命中位置。</li>
-        <li>在 Chrome 選單選「加到主畫面」/「安裝應用」，之後可離線使用。</li>
+        <li data-i18n-html="set.tip1Html"></li>
+        <li data-i18n-html="set.tip2Html"></li>
+        <li data-i18n-html="set.tip3Html"></li>
+        <li data-i18n-html="set.tip4Html"></li>
       </ul>
     </div>
     <p class="muted center small" id="versionInfo"></p>
@@ -113,13 +118,13 @@
 
 <nav class="tabbar">
   <button type="button" class="tab active" data-view="search">
-    <svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span>工作臺</span>
+    <svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span data-i18n="tab.search"></span>
   </button>
   <button type="button" class="tab" data-view="library">
-    <svg class="ico" viewBox="0 0 24 24"><path d="M4 5a1 1 0 0 1 1-1h5l2 2h7a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/></svg><span>手冊庫</span>
+    <svg class="ico" viewBox="0 0 24 24"><path d="M4 5a1 1 0 0 1 1-1h5l2 2h7a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/></svg><span data-i18n="tab.library"></span>
   </button>
   <button type="button" class="tab" data-view="settings">
-    <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg><span>設置</span>
+    <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg><span data-i18n="tab.settings"></span>
   </button>
 </nav>
 
@@ -127,37 +132,37 @@
 <div id="editSheet" class="overlay sheet-wrap" hidden>
   <form class="sheet" id="editForm" novalidate>
     <div class="sheet-head">
-      <button type="button" class="icon-btn" data-close aria-label="關閉">
+      <button type="button" class="icon-btn" data-close data-i18n-aria="edit.close">
         <svg class="ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
       </button>
-      <h2 id="editTitle">新增手冊</h2>
-      <button type="submit" class="btn primary sm" id="saveBtn">保存</button>
+      <h2 id="editTitle"></h2>
+      <button type="submit" class="btn primary sm" id="saveBtn" data-i18n="edit.save"></button>
     </div>
     <div class="sheet-body">
       <div class="field">
-        <span class="label">手冊文件 <em>*</em></span>
+        <span class="label"><span data-i18n="edit.file"></span> <em>*</em></span>
         <div class="file-pick">
-          <button type="button" id="pickFile" class="btn sm">選擇文件</button>
-          <span id="fileInfo" class="muted">未選擇（PDF、圖片、Word 等均可）</span>
+          <button type="button" id="pickFile" class="btn sm" data-i18n="edit.pick"></button>
+          <span id="fileInfo" class="muted"></span>
         </div>
         <input type="file" id="fileInput" hidden>
       </div>
       <label class="field">
-        <span class="label">適用型號 <em>*</em></span>
-        <textarea id="fModels" rows="2" placeholder="多個型號用逗號或換行分隔，例如：Dash 4000, Dash 5000"></textarea>
-        <small class="muted">同一本手冊適用多個型號時全部填上，查詢任一個都能找到。</small>
+        <span class="label"><span data-i18n="edit.models"></span> <em>*</em></span>
+        <textarea id="fModels" rows="2" data-i18n-ph="edit.modelsPh"></textarea>
+        <small class="muted" data-i18n="edit.modelsHint"></small>
       </label>
       <label class="field">
-        <span class="label">標題</span>
-        <input id="fTitle" placeholder="留空則使用文件名">
+        <span class="label" data-i18n="edit.titleLabel"></span>
+        <input id="fTitle" data-i18n-ph="edit.titlePh">
       </label>
       <div class="row2">
-        <label class="field"><span class="label">品牌 / 廠商</span><input id="fBrand" list="brandList"></label>
-        <label class="field"><span class="label">設備名稱</span><input id="fDevice" list="deviceList" placeholder="如：監護儀"></label>
+        <label class="field"><span class="label" data-i18n="edit.brand"></span><input id="fBrand" list="brandList"></label>
+        <label class="field"><span class="label" data-i18n="edit.device"></span><input id="fDevice" list="deviceList" data-i18n-ph="edit.devicePh"></label>
       </div>
-      <label class="field"><span class="label">科室 / 位置</span><input id="fDept" list="deptList"></label>
-      <label class="field"><span class="label">備註</span><textarea id="fNotes" rows="2" placeholder="如：資產編號、常見故障、聯絡工程師"></textarea></label>
-      <button type="button" id="deleteBtn" class="btn danger block" hidden>刪除此手冊</button>
+      <label class="field"><span class="label" data-i18n="edit.dept"></span><input id="fDept" list="deptList"></label>
+      <label class="field"><span class="label" data-i18n="edit.notes"></span><textarea id="fNotes" rows="2" data-i18n-ph="edit.notesPh"></textarea></label>
+      <button type="button" id="deleteBtn" class="btn danger block" hidden data-i18n="edit.delete"></button>
     </div>
   </form>
 </div>
@@ -168,32 +173,32 @@
 <!-- ========== 閱讀器 ========== -->
 <div id="viewer" class="overlay viewer" hidden>
   <div class="vbar">
-    <button type="button" class="icon-btn" data-close aria-label="返回">
+    <button type="button" class="icon-btn" data-close data-i18n-aria="v.back">
       <svg class="ico" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
     </button>
     <div class="vtitle" id="vTitle"></div>
-    <button type="button" class="icon-btn" id="vFindBtn" aria-label="在手冊內搜索">
+    <button type="button" class="icon-btn" id="vFindBtn" data-i18n-aria="v.find">
       <svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
     </button>
-    <button type="button" class="icon-btn" id="vMoreBtn" aria-label="更多">
+    <button type="button" class="icon-btn" id="vMoreBtn" data-i18n-aria="v.more">
       <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="12" cy="19" r="1.2"/></svg>
     </button>
   </div>
   <div class="vmenu" id="vMenu" hidden>
-    <button type="button" id="vShare">用其他應用打開 / 分享</button>
-    <button type="button" id="vInfo">手冊資料 / 編輯</button>
+    <button type="button" id="vShare" data-i18n="v.share"></button>
+    <button type="button" id="vInfo" data-i18n="v.info"></button>
   </div>
   <form class="vfind" id="vFindBar" hidden>
-    <input id="vFindInput" type="search" placeholder="搜索故障代碼、關鍵詞" enterkeyhint="search" autocomplete="off" spellcheck="false">
-    <button type="submit" class="btn primary sm">搜索</button>
+    <input id="vFindInput" type="search" data-i18n-ph="v.findPh" enterkeyhint="search" autocomplete="off" spellcheck="false">
+    <button type="submit" class="btn primary sm" data-i18n="v.findGo"></button>
   </form>
   <div class="vfind-results" id="vFindResults" hidden></div>
   <div class="vbody" id="vBody"><div class="pages" id="vPages"></div></div>
   <div class="vfoot" id="vFoot">
-    <button type="button" class="icon-btn" id="zOut" aria-label="縮小"><svg class="ico" viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
-    <button type="button" class="btn sm ghost" id="zFit">適合寬度</button>
-    <button type="button" class="icon-btn" id="zIn" aria-label="放大"><svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
-    <button type="button" class="page-ind" id="pageInd" aria-label="跳到頁碼">– / –</button>
+    <button type="button" class="icon-btn" id="zOut" data-i18n-aria="v.zoomOut"><svg class="ico" viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
+    <button type="button" class="btn sm ghost" id="zFit" data-i18n="v.fit"></button>
+    <button type="button" class="icon-btn" id="zIn" data-i18n-aria="v.zoomIn"><svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button type="button" class="page-ind" id="pageInd" data-i18n-aria="v.jumpAria">– / –</button>
   </div>
 </div>
 
@@ -201,12 +206,13 @@
 <div id="scanner" class="overlay scanner" hidden>
   <video id="scanVideo" playsinline muted></video>
   <div class="scan-frame"></div>
-  <p class="scan-tip">對準設備上的條碼 / 二維碼</p>
-  <button type="button" class="btn block" data-close>取消</button>
+  <p class="scan-tip" data-i18n="scan.tip"></p>
+  <button type="button" class="btn block" data-close data-i18n="scan.cancel"></button>
 </div>
 
 <div id="toast" role="status" aria-live="polite"></div>
 
+<script src="i18n.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

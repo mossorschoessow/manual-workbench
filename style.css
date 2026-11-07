@@ -150,14 +150,14 @@ main { padding-bottom: calc(var(--tabbar-h) + var(--safe-b) + 88px); }
 /* ---------- 按鈕 ---------- */
 .btn {
   border: 1px solid var(--line); background: var(--surface); color: var(--text);
-  height: 46px; padding: 0 18px; border-radius: 12px; font-weight: 600;
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 46px; padding: 6px 18px; border-radius: 12px; font-weight: 600; line-height: 1.25;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-align: center;
 }
 .btn:active { filter: brightness(.94); }
 .btn.primary { background: var(--primary); color: var(--primary-ink); border-color: var(--primary); }
 .btn.danger { color: var(--danger); border-color: var(--danger); background: transparent; }
 .btn.ghost { border-color: transparent; background: transparent; }
-.btn.sm { height: 38px; padding: 0 14px; font-size: 15px; }
+.btn.sm { min-height: 38px; padding: 4px 14px; font-size: 15px; }
 .btn.block { display: flex; width: 100%; }
 .btn[disabled] { opacity: .5; }
 .btn-row { display: flex; gap: 10px; }
@@ -176,6 +176,10 @@ main { padding-bottom: calc(var(--tabbar-h) + var(--safe-b) + 88px); }
 .panel p { margin: 0 0 10px; font-size: 14px; }
 .rules { margin: 0 0 12px; padding-left: 18px; font-size: 14px; color: var(--muted); }
 .rules li { margin: 4px 0; word-break: break-word; }
+.lang-select {
+  width: 100%; height: 46px; padding: 0 12px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--surface); font-size: 16px;
+}
 .kv-list { font-size: 14px; }
 .kv-list div { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px dashed var(--line); }
 .kv-list div:last-child { border-bottom: 0; }

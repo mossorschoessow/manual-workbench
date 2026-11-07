@@ -1,10 +1,11 @@
 /* 離線緩存：應用外殼預先緩存，其餘（cmaps、字體）首次使用時緩存。
  * 更新應用文件後，把 CACHE 版本號 +1，手機下次聯網打開時自動更新。 */
-const CACHE = 'manual-workbench-v1';
+const CACHE = 'manual-workbench-v2';
 const SHELL = [
   './',
   'index.html',
   'style.css',
+  'i18n.js',
   'app.js',
   'manifest.webmanifest',
   'icons/icon.svg',
@@ -28,16 +29,38 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const req = e.request;
-  if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
-  // 先用緩存（離線可用），同時在背景更新緩存
-  e.respondWith(
-    caches.open(CACHE).then(async (cache) => {
-      const cached = await cache.match(req, { ignoreSearch: true });
-      const net = fetch(req)
-        .then((res) => { if (res.ok) cache.put(req, res.clone()); return res; })
-        .catch(() => cached || (req.mode === 'navigate' ? cache.match('./') : Response.error()));
-      if (cached) { e.waitUntil(net.catch(() => {})); return cached; }
-      return net;
-    })
-  );
+  const url = new URL(req.url);
+  if (req.method !== 'GET' || url.origin !== location.origin) return;
+  e.respondWith(url.pathname.includes('/vendor/') ? cacheFirst(req) : networkFirst(req));
 });
+
+// 第三方庫路徑帶版本、不會變：優先用緩存
+async function cacheFirst(req) {
+  const cache = await caches.open(CACHE);
+  const cached = await cache.match(req, { ignoreSearch: true });
+  if (cached) return cached;
+  const res = await fetch(req);
+  if (res.ok) cache.put(req, res.clone());
+  return res;
+}
+
+// 應用本身：有網時取最新版（保證各文件版本一致），3 秒無響應或離線時用緩存
+async function networkFirst(req) {
+  const cache = await caches.open(CACHE);
+  try {
+    const res = await Promise.race([
+      fetch(req),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 3000)),
+    ]);
+    if (res.ok) cache.put(req, res.clone());
+    return res;
+  } catch {
+    const cached = await cache.match(req, { ignoreSearch: true });
+    if (cached) return cached;
+    if (req.mode === 'navigate') {
+      const shell = await cache.match('./');
+      if (shell) return shell;
+    }
+    return Response.error();
+  }
+}
