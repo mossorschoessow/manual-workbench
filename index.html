@@ -50,6 +50,10 @@
         <h2 class="section-h" data-i18n="home.recent"></h2>
         <div id="recentList" class="list"></div>
       </div>
+      <div id="recentExpWrap" hidden>
+        <h2 class="section-h" data-i18n="home.recentExp"></h2>
+        <div id="recentExpList" class="list"></div>
+      </div>
     </div>
   </section>
 
@@ -177,6 +181,9 @@
       <svg class="ico" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
     </button>
     <div class="vtitle" id="vTitle"></div>
+    <button type="button" class="icon-btn vexp" id="vExpBtn" data-i18n-aria="exp.title">
+      <svg class="ico" viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span class="badge" id="vExpCount" hidden></span>
+    </button>
     <button type="button" class="icon-btn" id="vFindBtn" data-i18n-aria="v.find">
       <svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
     </button>
@@ -201,6 +208,64 @@
     <button type="button" class="page-ind" id="pageInd" data-i18n-aria="v.jumpAria">– / –</button>
   </div>
 </div>
+
+<!-- ========== 維修經驗 ========== -->
+<div id="expSheet" class="overlay sheet-wrap" hidden>
+  <div class="sheet tall">
+    <div class="sheet-head">
+      <button type="button" class="icon-btn" data-close data-i18n-aria="edit.close">
+        <svg class="ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+      <div class="sheet-title">
+        <h2 data-i18n="exp.title"></h2>
+        <div class="sheet-sub" id="expSub"></div>
+      </div>
+      <button type="button" class="btn primary sm" id="expAddBtn" data-i18n="exp.add"></button>
+    </div>
+    <div class="exp-filter" id="expFilterWrap">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="expFilter" type="search" data-i18n-ph="exp.filterPh" autocomplete="off" spellcheck="false" enterkeyhint="search">
+    </div>
+    <div class="sheet-body" id="expBody"></div>
+  </div>
+</div>
+
+<div id="expEdit" class="overlay sheet-wrap" hidden>
+  <form class="sheet" id="expForm" novalidate>
+    <div class="sheet-head">
+      <button type="button" class="icon-btn" data-close data-i18n-aria="edit.close">
+        <svg class="ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+      <h2 id="expEditTitle"></h2>
+      <button type="submit" class="btn primary sm" id="expSaveBtn" data-i18n="edit.save"></button>
+    </div>
+    <div class="sheet-body">
+      <label class="field">
+        <span class="label"><span data-i18n="exp.item"></span> <em>*</em></span>
+        <input id="xItem" list="expItemList" data-i18n-ph="exp.itemPh" autocomplete="off">
+        <small class="muted" data-i18n="exp.itemHint"></small>
+      </label>
+      <div class="field">
+        <span class="label" data-i18n="exp.result"></span>
+        <div class="seg">
+          <label><input type="radio" name="xResult" value="ok" checked><span data-i18n="exp.ok"></span></label>
+          <label><input type="radio" name="xResult" value="partial"><span data-i18n="exp.partial"></span></label>
+          <label><input type="radio" name="xResult" value="fail"><span data-i18n="exp.fail"></span></label>
+        </div>
+      </div>
+      <label class="field">
+        <span class="label"><span data-i18n="exp.content"></span> <em>*</em></span>
+        <textarea id="xContent" rows="6" data-i18n-ph="exp.contentPh"></textarea>
+      </label>
+      <div class="row2">
+        <label class="field"><span class="label" data-i18n="exp.date"></span><input id="xDate" type="date"></label>
+        <label class="field"><span class="label" data-i18n="exp.author"></span><input id="xAuthor" data-i18n-ph="exp.authorPh" autocomplete="name"></label>
+      </div>
+      <button type="button" id="xDelete" class="btn danger block" hidden data-i18n="exp.delete"></button>
+    </div>
+  </form>
+</div>
+<datalist id="expItemList"></datalist>
 
 <!-- ========== 掃碼 ========== -->
 <div id="scanner" class="overlay scanner" hidden>

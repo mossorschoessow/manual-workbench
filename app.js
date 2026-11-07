@@ -2,7 +2,7 @@
 /* 設備維修手冊工作臺
  * 純前端離線應用：手冊元資料與文件均存於本機 IndexedDB。
  */
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.3.0';
 const $ = (s, el = document) => el.querySelector(s);
 
 /* =========================================================
@@ -47,20 +47,28 @@ async function nativeFile(blob, name, mime, action) {
  * manuals: 元資料（常駐記憶體以便即時搜索）
  * files:   文件本體 Blob（打開時才讀取）
  * kv:      最近查看、收藏等
+ * exps:    維修經驗（1.3.0 起；按 manualId 歸屬到手冊，常駐記憶體）
  * ========================================================= */
 const DB_NAME = 'manual-workbench';
 let dbPromise;
 function openDB() {
   if (!dbPromise) {
     dbPromise = new Promise((resolve, reject) => {
-      const r = indexedDB.open(DB_NAME, 1);
-      r.onupgradeneeded = () => {
+      const r = indexedDB.open(DB_NAME, 2);
+      r.onupgradeneeded = (e) => {
         const db = r.result;
-        db.createObjectStore('manuals', { keyPath: 'id' });
-        db.createObjectStore('files', { keyPath: 'id' });
-        db.createObjectStore('kv');
+        if (e.oldVersion < 1) {
+          db.createObjectStore('manuals', { keyPath: 'id' });
+          db.createObjectStore('files', { keyPath: 'id' });
+          db.createObjectStore('kv');
+        }
+        if (e.oldVersion < 2) db.createObjectStore('exps', { keyPath: 'id' });
       };
-      r.onsuccess = () => resolve(r.result);
+      r.onsuccess = () => {
+        // 另一個分頁升級資料庫時讓出連接，避免它被卡住
+        r.result.onversionchange = () => r.result.close();
+        resolve(r.result);
+      };
       r.onerror = () => reject(r.error);
     });
   }
@@ -87,13 +95,17 @@ const store = {
     if (blob) t.objectStore('files').put({ id: meta.id, blob });
     return txDone(t);
   },
-  async remove(id) {
+  async remove(id, expIds = []) {
     const db = await openDB();
-    const t = db.transaction(['manuals', 'files'], 'readwrite');
+    const t = db.transaction(['manuals', 'files', 'exps'], 'readwrite');
     t.objectStore('manuals').delete(id);
     t.objectStore('files').delete(id);
+    for (const x of expIds) t.objectStore('exps').delete(x);
     return txDone(t);
   },
+  async allExps() { const db = await openDB(); return reqP(db.transaction('exps').objectStore('exps').getAll()); },
+  async putExp(x) { const db = await openDB(); const t = db.transaction('exps', 'readwrite'); t.objectStore('exps').put(x); return txDone(t); },
+  async removeExp(id) { const db = await openDB(); const t = db.transaction('exps', 'readwrite'); t.objectStore('exps').delete(id); return txDone(t); },
   async get(k) { const db = await openDB(); return reqP(db.transaction('kv').objectStore('kv').get(k)); },
   async set(k, v) { const db = await openDB(); const t = db.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); return txDone(t); },
 };
@@ -110,6 +122,23 @@ function setManuals(list) {
   manuals = list;
   byId = new Map(list.map((m) => [m.id, m]));
 }
+
+let exps = [];                // 全部維修經驗
+let expsByManual = new Map(); // manualId → 經驗（新的在前）
+const expNewer = (a, b) => (b.date - a.date) || (b.updatedAt - a.updatedAt);
+function setExps(list) {
+  for (const x of list) {
+    // 搜索用的標準化文字，不可枚舉，不會寫進備份
+    Object.defineProperty(x, '_hay', { value: normText([x.item, x.content, x.author].join(' ')), enumerable: false, configurable: true });
+  }
+  exps = list;
+  expsByManual = new Map();
+  for (const x of [...list].sort(expNewer)) {
+    if (!expsByManual.has(x.manualId)) expsByManual.set(x.manualId, []);
+    expsByManual.get(x.manualId).push(x);
+  }
+}
+const expCount = (id) => (expsByManual.get(id) || []).length;
 
 /* =========================================================
  * 工具函數
@@ -201,14 +230,36 @@ function search(query) {
       const hay = normText([m.title, m.brand, m.device, m.dept, m.notes, m.fileName].join(' '));
       if (hay.includes(qt) || (tokens.length > 1 && tokens.every((t) => hay.includes(t)))) score = Math.max(score, 30);
     }
-    if (score) out.push({ m, score, hits });
+    // 維修經驗：故障代碼、配件名等寫在經驗裡也能找到這台設備（顯示最新的一條命中）
+    const expHit = (expsByManual.get(m.id) || []).find((x) => x._hay.includes(qt) || (tokens.length > 1 && tokens.every((t) => x._hay.includes(t))));
+    if (expHit) score = Math.max(score, 35);
+    if (score) out.push({ m, score, hits, expHit });
   }
   out.sort((a, b) => b.score - a.score || cmp(a.m.title, b.m.title));
   return out;
 }
 
-function cardHTML(m, hits, best) {
+const BULB = '<svg class="ico" viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg>';
+
+/** 轉義並把 q 標記出來（不分大小寫） */
+function markText(text, q) {
+  const str = String(text || '');
+  const needle = String(q || '').trim().toLowerCase();
+  if (!needle) return esc(str);
+  const low = str.toLowerCase();
+  let out = '', i = 0, j;
+  while ((j = low.indexOf(needle, i)) !== -1) {
+    out += esc(str.slice(i, j)) + '<mark>' + esc(str.slice(j, j + needle.length)) + '</mark>';
+    i = j + needle.length;
+  }
+  return out + esc(str.slice(i));
+}
+
+function cardHTML(m, hits, best, expHit, q) {
   const [cls, label] = fileBadge(m);
+  const n = expCount(m.id);
+  const expLine = expHit ? `<div class="card-exp"><b>${markText(expHit.item, q)}</b> ${markText(expHit.content, q)}</div>` : '';
+  const pill = n ? `<button type="button" class="exp-pill" data-exps="${m.id}"${expHit ? ` data-exps-q="${esc(q)}"` : ''}>${BULB}${esc(t('exp.count', { n }))}</button>` : '';
   const chips = m.models.map((x) => `<span class="chip${hits && hits.has(x) ? ' hit' : ''}">${esc(x)}</span>`).join('');
   const sub = [m.brand, m.device, m.dept].filter(Boolean).map(esc).join(' · ');
   return `<div class="card${best ? ' best' : ''}" data-open="${m.id}">
@@ -217,6 +268,7 @@ function cardHTML(m, hits, best) {
       <div class="card-title">${esc(m.title)}</div>
       <div class="chips">${chips}</div>
       ${sub ? `<div class="card-sub">${sub}</div>` : ''}
+      ${expLine}${pill}
     </div>
     <div class="card-actions">
       <button type="button" class="icon-btn star${favs.has(m.id) ? ' on' : ''}" data-star="${m.id}" aria-label="${esc(t('card.fav'))}">
@@ -257,7 +309,7 @@ function renderSearch() {
   }
   const exact = res.filter((r) => r.score === 100).length;
   meta.textContent = !exact ? t('search.near', { n: res.length }) : res.length > exact ? t('search.exactNear', { n: exact, m: res.length - exact }) : t('search.exact', { n: exact });
-  results.innerHTML = res.slice(0, 100).map((r, i) => cardHTML(r.m, r.hits, i === 0 && r.score === 100)).join('');
+  results.innerHTML = res.slice(0, 100).map((r, i) => cardHTML(r.m, r.hits, i === 0 && r.score === 100, r.expHit, raw.trim())).join('');
 }
 
 function renderHome() {
@@ -268,6 +320,13 @@ function renderHome() {
   const rec = recent.map((id) => byId.get(id)).filter(Boolean).slice(0, 8);
   $('#recentWrap').hidden = !rec.length;
   $('#recentList').innerHTML = rec.map((m) => cardHTML(m)).join('');
+  const recExp = exps.filter((x) => byId.has(x.manualId)).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 5);
+  $('#recentExpWrap').hidden = !recExp.length;
+  $('#recentExpList').innerHTML = recExp.map((x) => `<button type="button" class="exp-row" data-exps="${x.manualId}" data-exp-focus="${x.id}">
+      <span class="exp-row-top">${resultTag(x.result)}<b>${esc(x.item)}</b></span>
+      <span class="exp-row-text">${esc(x.content)}</span>
+      <span class="exp-row-sub">${esc(byId.get(x.manualId).title)} · ${fmtDate(x.date)}</span>
+    </button>`).join('');
 }
 
 /* =========================================================
@@ -299,7 +358,7 @@ function renderLibrary() {
  * ========================================================= */
 async function renderSettings() {
   const total = manuals.reduce((s, m) => s + (m.size || 0), 0);
-  const rows = [[t('set.count'), t('set.countVal', { n: manuals.length })], [t('set.size'), fmtSize(total)]];
+  const rows = [[t('set.count'), t('set.countVal', { n: manuals.length })], [t('set.expCount'), t('set.expCountVal', { n: exps.length })], [t('set.size'), fmtSize(total)]];
   if (navigator.storage?.estimate) {
     try {
       const e = await navigator.storage.estimate();
@@ -470,10 +529,12 @@ $('#editForm').onsubmit = async (e) => {
 
 $('#deleteBtn').onclick = async () => {
   if (!editing) return;
-  if (!confirm(t('edit.delConfirm', { t: editing.title }))) return;
   const id = editing.id;
-  await store.remove(id);
+  const expIds = (expsByManual.get(id) || []).map((x) => x.id);
+  if (!confirm(expIds.length ? t('edit.delConfirmExp', { t: editing.title, n: expIds.length }) : t('edit.delConfirm', { t: editing.title }))) return;
+  await store.remove(id, expIds);
   setManuals(manuals.filter((x) => x.id !== id));
+  setExps(exps.filter((x) => x.manualId !== id));
   favs.delete(id);
   recent = recent.filter((x) => x !== id);
   store.set('favs', [...favs]);
@@ -540,7 +601,10 @@ $('#exportBtn').onclick = async () => {
       blobs.push(blob);
       offset += blob.size;
     }
-    const header = new TextEncoder().encode(JSON.stringify({ app: 'manual-workbench', version: 1, exportedAt: Date.now(), entries }));
+    // version 2 起加入 exps；舊版應用恢復時會忽略這個欄位，仍能恢復手冊
+    const saved = new Set(entries.map((en) => en.meta.id));
+    const backupExps = exps.filter((x) => saved.has(x.manualId));
+    const header = new TextEncoder().encode(JSON.stringify({ app: 'manual-workbench', version: 2, exportedAt: Date.now(), entries, exps: backupExps }));
     const len = String(header.length).padStart(12, '0');
     const out = new Blob([MAGIC, len, header, ...blobs], { type: 'application/octet-stream' });
     const fileName = `${t('set.backupFile')}_${fmtDate(Date.now())}.manlib`;
@@ -595,6 +659,15 @@ $('#importInput').onchange = async (e) => {
       list.set(meta.id, withNorm(meta));
     }
     setManuals([...list.values()]);
+    if (Array.isArray(header.exps)) {
+      const merged = new Map(exps.map((x) => [x.id, x]));
+      for (const x of header.exps) {
+        if (!x || !x.id || !list.has(x.manualId)) continue;
+        await store.putExp(x);
+        merged.set(x.id, x);
+      }
+      setExps([...merged.values()]);
+    }
     requestPersist();
     toast(t('set.importDone', { n }), 3000);
     refresh();
@@ -693,6 +766,7 @@ async function openManual(id) {
   viewerMeta = m;
   pushRecent(id);
   $('#vTitle').textContent = m.title;
+  updateViewerExpCount();
   $('#vMenu').hidden = true;
   $('#vFindBar').hidden = true;
   $('#vFindResults').hidden = true;
@@ -1100,6 +1174,153 @@ window.addEventListener('resize', () => {
 });
 
 /* =========================================================
+ * 維修經驗
+ * 同一台設備（手冊）下按「維修項目」歸組，每個項目可以累積多條經驗，新的在前。
+ * ========================================================= */
+const RESULTS = ['ok', 'partial', 'fail'];
+const resultTag = (r) => { const k = RESULTS.includes(r) ? r : 'ok'; return `<span class="res res-${k}">${esc(t('exp.' + k))}</span>`; };
+const itemKey = (s) => normText(s);
+let expManual = null;
+let expEditing = null;
+
+function updateViewerExpCount() {
+  if (!viewerMeta) return;
+  const n = expCount(viewerMeta.id);
+  $('#vExpCount').hidden = !n;
+  $('#vExpCount').textContent = n > 99 ? '99+' : String(n);
+}
+
+function openExps(manualId, { q = '', focus = null } = {}) {
+  expManual = byId.get(manualId);
+  if (!expManual) return;
+  $('#expSub').textContent = [expManual.title, expManual.models.join(', ')].filter(Boolean).join(' · ');
+  $('#expFilter').value = q;
+  renderExps(focus);
+  openOverlay($('#expSheet'));
+}
+
+function renderExps(focus) {
+  if (!expManual) return;
+  const list = expsByManual.get(expManual.id) || [];
+  const body = $('#expBody');
+  $('#expFilterWrap').hidden = !list.length;
+  if (!list.length) {
+    body.innerHTML = `<div class="empty"><p>${esc(t('exp.empty1'))}</p><p class="muted">${esc(t('exp.empty2'))}</p>
+      <button type="button" class="btn primary" data-exp-add="">${esc(t('exp.add'))}</button></div>`;
+    return;
+  }
+  const raw = $('#expFilter').value.trim();
+  const fq = normText(raw);
+  const groups = new Map();
+  for (const x of list) {
+    const k = itemKey(x.item);
+    if (!groups.has(k)) groups.set(k, { name: x.item, all: [] });
+    groups.get(k).all.push(x);
+  }
+  const html = [];
+  for (const g of groups.values()) {
+    // 項目名命中時整組都顯示，否則只顯示內容命中的經驗
+    const shown = !fq || itemKey(g.name).includes(fq) ? g.all : g.all.filter((x) => x._hay.includes(fq));
+    if (!shown.length) continue;
+    html.push(`<section class="exp-group">
+      <div class="exp-ghead"><h3>${markText(g.name, raw)}</h3><span>${esc(t('exp.groupMeta', { n: g.all.length, d: fmtDate(g.all[0].date) }))}</span></div>
+      ${shown.map((x) => `<article class="exp${x.id === focus ? ' flash' : ''}" data-exp-id="${x.id}">
+        <div class="exp-meta">${resultTag(x.result)}<span>${fmtDate(x.date)}</span>${x.author ? `<span>${esc(x.author)}</span>` : ''}
+          <button type="button" class="icon-btn" data-exp-edit="${x.id}" aria-label="${esc(t('exp.edit'))}"><svg class="ico" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button>
+        </div>
+        <div class="exp-text">${markText(x.content, raw)}</div>
+      </article>`).join('')}
+      <button type="button" class="btn sm ghost exp-more" data-exp-add="${esc(g.name)}">+ ${esc(t('exp.addMore'))}</button>
+    </section>`);
+  }
+  body.innerHTML = html.length ? html.join('') : `<div class="empty"><p class="muted">${esc(t('exp.noMatch', { q: raw }))}</p></div>`;
+  if (focus) {
+    const el = body.querySelector(`[data-exp-id="${focus}"]`);
+    if (el) requestAnimationFrame(() => el.scrollIntoView({ block: 'center' }));
+  }
+}
+$('#expFilter').addEventListener('input', () => renderExps());
+$('#expAddBtn').onclick = () => openExpEditor(null);
+$('#expSheet').addEventListener('click', (e) => { if (e.target.id === 'expSheet') closeOverlay(); });
+$('#expEdit').addEventListener('click', (e) => { if (e.target.id === 'expEdit') closeOverlay(); });
+
+function lastAuthor() { try { return localStorage.getItem('expAuthor') || ''; } catch { return ''; } }
+
+function openExpEditor(x, item = '') {
+  if (!expManual) return;
+  expEditing = x || null;
+  $('#expForm').querySelectorAll('.invalid').forEach((el) => el.classList.remove('invalid'));
+  $('#expEditTitle').textContent = x ? t('exp.edit') : t('exp.new');
+  $('#xItem').value = x ? x.item : item;
+  $('#xContent').value = x ? x.content : '';
+  $('#xDate').value = fmtDate(x ? x.date : Date.now());
+  $('#xAuthor').value = x ? (x.author || '') : lastAuthor();
+  const r = x && RESULTS.includes(x.result) ? x.result : 'ok';
+  $('#expForm').querySelectorAll('[name=xResult]').forEach((el) => { el.checked = el.value === r; });
+  const names = new Map();
+  for (const e of expsByManual.get(expManual.id) || []) if (!names.has(itemKey(e.item))) names.set(itemKey(e.item), e.item);
+  $('#expItemList').innerHTML = [...names.values()].map((v) => `<option value="${esc(v)}">`).join('');
+  $('#xDelete').hidden = !x;
+  openOverlay($('#expEdit'));
+}
+
+$('#expForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const item = $('#xItem').value.trim();
+  const content = $('#xContent').value.trim();
+  $('#xItem').closest('.field').classList.toggle('invalid', !item);
+  $('#xContent').closest('.field').classList.toggle('invalid', !content);
+  if (!item || !content) { toast(t('exp.required')); return; }
+  // 同一項目沿用已有的寫法，避免「E03堵塞」「e03 堵塞」分成兩組
+  const same = (expsByManual.get(expManual.id) || []).find((x) => x !== expEditing && itemKey(x.item) === itemKey(item));
+  const [y, mo, d] = $('#xDate').value.split('-').map(Number);
+  const date = y ? new Date(y, mo - 1, d, 12).getTime() : Date.now();
+  const now = Date.now();
+  const rec = {
+    ...(expEditing || { id: uid(), createdAt: now }),
+    manualId: expManual.id,
+    item: same ? same.item : item,
+    result: $('#expForm').querySelector('[name=xResult]:checked')?.value || 'ok',
+    content,
+    date,
+    author: $('#xAuthor').value.trim(),
+    updatedAt: now,
+  };
+  const btn = $('#expSaveBtn');
+  btn.disabled = true;
+  try {
+    await store.putExp(rec);
+    setExps(exps.filter((x) => x.id !== rec.id).concat(rec));
+    try { localStorage.setItem('expAuthor', rec.author); } catch { /* ignore */ }
+    requestPersist();
+    closeOverlay();
+    $('#expFilter').value = '';
+    renderExps(rec.id);
+    updateViewerExpCount();
+    refresh();
+    toast(t('exp.saved'));
+  } catch (err) {
+    console.error(err);
+    toast(isQuota(err) ? t('edit.quota') : t('edit.saveFail', { e: err.message || err }), 4000);
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+$('#xDelete').onclick = async () => {
+  if (!expEditing || !confirm(t('exp.delConfirm'))) return;
+  const id = expEditing.id;
+  await store.removeExp(id);
+  setExps(exps.filter((x) => x.id !== id));
+  closeOverlay();
+  renderExps();
+  updateViewerExpCount();
+  refresh();
+  toast(t('exp.deleted'));
+};
+$('#vExpBtn').onclick = () => { if (viewerMeta) openExps(viewerMeta.id); };
+
+/* =========================================================
  * 全局事件
  * ========================================================= */
 document.addEventListener('click', (e) => {
@@ -1108,6 +1329,12 @@ document.addEventListener('click', (e) => {
   if (star) { e.stopPropagation(); toggleFav(star.dataset.star); return; }
   const ed = t.closest('[data-edit]');
   if (ed) { e.stopPropagation(); openEditor(byId.get(ed.dataset.edit)); return; }
+  const ex = t.closest('[data-exps]');
+  if (ex) { e.stopPropagation(); openExps(ex.dataset.exps, { q: ex.dataset.expsQ || '', focus: ex.dataset.expFocus || null }); return; }
+  const xe = t.closest('[data-exp-edit]');
+  if (xe) { openExpEditor(exps.find((x) => x.id === xe.dataset.expEdit)); return; }
+  const xa = t.closest('[data-exp-add]');
+  if (xa) { openExpEditor(null, xa.dataset.expAdd); return; }
   const op = t.closest('[data-open]');
   if (op) { openManual(op.dataset.open); return; }
   const add = t.closest('[data-add-model]');
@@ -1171,8 +1398,9 @@ async function init() {
     $('#scanBtn').onclick = startScan;
   }
   try {
-    const [list, r, f] = await Promise.all([store.allMeta(), store.get('recent'), store.get('favs')]);
+    const [list, r, f, xs] = await Promise.all([store.allMeta(), store.get('recent'), store.get('favs'), store.allExps()]);
     setManuals(list.map(withNorm));
+    setExps(xs);
     recent = r || [];
     favs = new Set(f || []);
   } catch (err) {
