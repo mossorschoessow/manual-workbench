@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">維修手冊</string>
+    <string name="share_title">用其他應用打開 / 分享</string>
+    <string name="no_app">沒有可以打開這個文件的應用</string>
+</resources>

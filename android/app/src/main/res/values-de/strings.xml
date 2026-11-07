@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Handbücher</string>
+    <string name="share_title">Öffnen mit / teilen</string>
+    <string name="no_app">Keine App kann diese Datei öffnen</string>
+</resources>

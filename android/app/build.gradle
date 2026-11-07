@@ -1,0 +1,78 @@
+plugins {
+    id 'com.android.application'
+}
+
+// 網頁文件就在倉庫根目錄（android/ 的上一層），版本號直接讀 app.js 的 APP_VERSION
+def webRoot = rootProject.file('..')
+def appVersion = (new File(webRoot, 'app.js').getText('UTF-8') =~ /APP_VERSION = '(\d+)\.(\d+)\.(\d+)'/)[0]
+
+// 簽名金鑰：android/keystore.properties（不提交到 Git）
+def keyProps = new Properties()
+def keyPropsFile = rootProject.file('keystore.properties')
+if (keyPropsFile.exists()) keyPropsFile.withInputStream { keyProps.load(it) }
+
+android {
+    namespace 'io.github.mossorschoessow.manualworkbench'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'io.github.mossorschoessow.manualworkbench'
+        minSdk 24
+        targetSdk 34
+        versionName "${appVersion[1]}.${appVersion[2]}.${appVersion[3]}"
+        versionCode appVersion[1].toInteger() * 10000 + appVersion[2].toInteger() * 100 + appVersion[3].toInteger()
+    }
+
+    signingConfigs {
+        release {
+            if (keyPropsFile.exists()) {
+                storeFile rootProject.file(keyProps['storeFile'])
+                storePassword keyProps['storePassword']
+                keyAlias keyProps['keyAlias']
+                keyPassword keyProps['keyPassword']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (keyPropsFile.exists()) signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    // 發布構建前的 lint 檢查需要另外下載大量工具，這個小項目用不上
+    lint {
+        checkReleaseBuilds false
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    sourceSets {
+        main.assets.srcDirs += layout.buildDirectory.dir('generated/webAssets')
+    }
+}
+
+// 每次構建時把網頁應用複製進 APK 的 assets/www
+def copyWeb = tasks.register('copyWebAssets', Sync) {
+    from(webRoot) {
+        include 'index.html', 'style.css', 'i18n.js', 'app.js', 'manifest.webmanifest', 'icons/**', 'vendor/**'
+    }
+    into layout.buildDirectory.dir('generated/webAssets/www')
+}
+tasks.configureEach { t ->
+    def n = t.name.toLowerCase()
+    if (t.name != 'copyWebAssets' && (n.contains('assets') || n.contains('lint'))) t.dependsOn copyWeb
+}
+
+dependencies {
+    implementation 'androidx.core:core:1.9.0'
+    implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
+}

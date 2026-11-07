@@ -1,10 +1,19 @@
 # 設備維修手冊工作臺
 
 給醫院設備維護人員用的手機應用：輸入設備型號，馬上打開對應的維修手冊。
-純網頁技術（PWA），**在安卓 Chrome 上安裝到主畫面後可完全離線使用**，手冊存在手機本機，不上傳任何伺服器。
+手冊存在手機本機，不上傳任何伺服器，沒網也能用。有兩種安裝方式，功能相同：
 
-**📱 安裝網址：<https://mossorschoessow.github.io/manual-workbench/>**
-用安卓 Chrome 打開 →「⋮」→「安裝應用」。
+| | 安卓安裝包（APK） | 網頁版（PWA） |
+|---|---|---|
+| 下載 / 打開 | **[manual-workbench.apk](https://github.com/mossorschoessow/manual-workbench/releases/latest/download/manual-workbench.apk)**（[所有版本](https://github.com/mossorschoessow/manual-workbench/releases)） | <https://mossorschoessow.github.io/manual-workbench/> |
+| 需要 | Android 7.0 以上，**不需要 Chrome、不需要 Google 服務** | 安卓 Chrome |
+| 安裝 | 下載後點開安裝（首次需允許「安裝未知應用」） | Chrome「⋮」→「安裝應用」 |
+| 更新 | 下載新版 APK 覆蓋安裝，手冊保留 | 聯網打開時自動更新 |
+| 網絡權限 | 不申請，完全離線 | 需要網絡下載應用本身 |
+
+**醫院的手機如果是華為、榮耀等沒有 Google 服務的機型，請用 APK。** APK 文件可以直接通過微信、U 盤等發給同事安裝。
+
+兩種方式的手冊庫互相獨立。從網頁版換到 APK：網頁版「設置 → 導出備份」→ APK「設置 → 從備份恢復」。
 
 ## 功能
 
@@ -31,6 +40,7 @@
 
 ## 版本記錄
 
+- **1.2.0**：提供安卓安裝包（APK），不依賴 Chrome，可在沒有 Google 服務的手機上使用；修正安卓上新增的手冊在應用重啟後可能讀不出內容的問題（現在入庫時會複製一份文件內容）。
 - **1.1.0**：新增 10 種介面語言；修正有網時更新後可能先打開舊版的問題（應用文件改為聯網優先）；長文字按鈕可自動換行。
 - **1.0.0**：首個版本。
 
@@ -63,10 +73,23 @@
 
 ## 注意事項
 
-- 資料存在手機瀏覽器的本機存儲。**清除 Chrome 的網站資料會刪除所有手冊**，請定期導出備份（設置頁會顯示上次備份日期）。
+- 資料存在手機本機。網頁版**清除 Chrome 的網站資料**、APK **卸載或清除應用資料**都會刪除所有手冊，請定期導出備份（設置頁會顯示上次備份日期）。
 - 安裝到主畫面後，Chrome 一般會把存儲標記為「持久」，不會因空間不足被自動清理；設置頁可查看狀態。
 - 掃描版 PDF（整頁是圖片）無法進行文字搜索，型號查詢不受影響。
 - 修改了應用代碼後，把 `sw.js` 裡的 `CACHE` 版本號加 1，手機下次聯網打開時會自動更新。手冊資料不受更新影響。
+
+## 構建 APK
+
+`android/` 是一個很薄的原生殼：用 WebView 運行倉庫根目錄的網頁文件（構建時自動複製進安裝包），並用原生代碼處理網頁在 WebView 裡做不到的保存文件、分享和掃碼。版本號取自 `app.js` 的 `APP_VERSION`。
+
+需要 JDK 17 和 Android SDK（裝了 Android Studio 就有）：
+
+```bash
+cd android
+./gradlew assembleRelease   # 輸出 app/build/outputs/apk/release/app-release.apk
+```
+
+**簽名金鑰不在倉庫裡**（倉庫是公開的）。發布構建需要 `android/release.jks` 和 `android/keystore.properties`；沒有這兩個文件時構建出來的是未簽名的包。以後的新版本**必須用同一個金鑰簽名**才能覆蓋安裝；換了金鑰只能先卸載舊版，而卸載會刪除手機裡的手冊。
 
 ## 文件結構
 
@@ -79,5 +102,6 @@ manual-app/
 ├── sw.js                 離線緩存
 ├── manifest.webmanifest  安裝到主畫面的設定
 ├── icons/                應用圖示
-└── vendor/pdfjs/         PDF.js 3.11.174（Apache-2.0）
+├── vendor/pdfjs/         PDF.js 3.11.174（Apache-2.0）
+└── android/              APK 原生殼（WebView + 保存 / 分享 / 掃碼橋接，掃碼用 ZXing Android Embedded，Apache-2.0）
 ```

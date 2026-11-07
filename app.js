@@ -2,8 +2,45 @@
 /* 設備維修手冊工作臺
  * 純前端離線應用：手冊元資料與文件均存於本機 IndexedDB。
  */
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 const $ = (s, el = document) => el.querySelector(s);
+
+/* =========================================================
+ * 安卓安裝包（APK）原生橋接
+ * 在 APK 裡運行時，MainActivity 會注入 window.NativeApp。
+ * WebView 不支持網頁的下載、分享和 BarcodeDetector，這幾項改由原生處理。
+ * ========================================================= */
+const NATIVE = window.NativeApp || null;
+const nativePending = new Map();
+let nativeSeq = 0;
+window.__nativeResolve = (id, value) => {
+  const done = nativePending.get(id);
+  if (done) { nativePending.delete(id); done(value); }
+};
+function nativeWait(start) {
+  const id = 'c' + (++nativeSeq);
+  return new Promise((resolve) => { nativePending.set(id, resolve); start(id); });
+}
+const blobToB64 = (blob) => new Promise((resolve, reject) => {
+  const fr = new FileReader();
+  fr.onload = () => resolve(fr.result.slice(fr.result.indexOf(',') + 1));
+  fr.onerror = () => reject(fr.error);
+  fr.readAsDataURL(blob);
+});
+// 分塊把 Blob 交給原生端寫入文件，再保存（save，用戶選位置）或分享 / 用其他應用打開（share）。
+// 返回 true 表示完成，false 表示用戶取消。
+async function nativeFile(blob, name, mime, action) {
+  const id = NATIVE.begin(name, mime || '');
+  if (id.startsWith('error:')) throw new Error(id.slice(6));
+  const CHUNK = 1 << 20;
+  for (let o = 0; o < blob.size; o += CHUNK) {
+    const err = NATIVE.chunk(id, await blobToB64(blob.slice(o, o + CHUNK)));
+    if (err) throw new Error(err);
+  }
+  const r = await nativeWait((cb) => NATIVE.finish(id, action, cb));
+  if (r.startsWith('error:')) throw new Error(r.slice(6));
+  return r === 'ok';
+}
 
 /* =========================================================
  * 存儲層（IndexedDB）
@@ -41,6 +78,9 @@ const store = {
   async allMeta() { const db = await openDB(); return reqP(db.transaction('manuals').objectStore('manuals').getAll()); },
   async file(id) { const db = await openDB(); const rec = await reqP(db.transaction('files').objectStore('files').get(id)); return rec ? rec.blob : null; },
   async put(meta, blob) {
+    // 用戶選的 File 在安卓 WebView 裡只是指向 content:// 的引用，應用重啟後授權失效會讀成 0 字節，
+    // 所以先把內容複製成獨立的 Blob 再存（必須在開事務之前，事務遇到 await 會自動提交）。
+    if (blob instanceof File) blob = new Blob([await blob.arrayBuffer()], { type: blob.type });
     const db = await openDB();
     const t = db.transaction(['manuals', 'files'], 'readwrite');
     t.objectStore('manuals').put(meta);
@@ -266,7 +306,9 @@ async function renderSettings() {
       rows.push([t('set.quota'), fmtSize(Math.max(0, e.quota - e.usage))]);
     } catch { /* ignore */ }
   }
-  if (navigator.storage?.persisted) {
+  if (NATIVE) {
+    rows.push([t('set.persist'), t('set.persistOn')]);
+  } else if (navigator.storage?.persisted) {
     try {
       const p = await navigator.storage.persisted();
       rows.push([t('set.persist'), p ? t('set.persistOn') : t('set.persistOff')]);
@@ -444,6 +486,7 @@ $('#deleteBtn').onclick = async () => {
 const isQuota = (err) => err && (err.name === 'QuotaExceededError' || /quota/i.test(err.message || ''));
 
 async function requestPersist() {
+  if (NATIVE) return;
   try { if (navigator.storage?.persist && !(await navigator.storage.persisted())) await navigator.storage.persist(); } catch { /* ignore */ }
 }
 
@@ -500,15 +543,20 @@ $('#exportBtn').onclick = async () => {
     const header = new TextEncoder().encode(JSON.stringify({ app: 'manual-workbench', version: 1, exportedAt: Date.now(), entries }));
     const len = String(header.length).padStart(12, '0');
     const out = new Blob([MAGIC, len, header, ...blobs], { type: 'application/octet-stream' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(out);
-    a.download = `${t('set.backupFile')}_${fmtDate(Date.now())}.manlib`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    const fileName = `${t('set.backupFile')}_${fmtDate(Date.now())}.manlib`;
+    if (NATIVE) {
+      if (!(await nativeFile(out, fileName, 'application/octet-stream', 'save'))) return;
+    } else {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(out);
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    }
     await store.set('lastBackup', Date.now());
-    toast(t('set.exportDone', { n: entries.length, size: fmtSize(out.size) }), 4000);
+    toast(t(NATIVE ? 'set.exportSaved' : 'set.exportDone', { n: entries.length, size: fmtSize(out.size) }), 4000);
     if (currentView === 'settings') renderSettings();
   } catch (err) {
     console.error(err);
@@ -1025,6 +1073,11 @@ $('#vShare').onclick = () => { $('#vMenu').hidden = true; shareFile(); };
 
 async function shareFile() {
   if (!viewerBlob || !viewerMeta) return;
+  if (NATIVE) {
+    try { await nativeFile(viewerBlob, viewerMeta.fileName || 'manual', viewerMeta.fileType || viewerBlob.type, 'share'); }
+    catch (err) { toast(err.message || String(err), 3500); }
+    return;
+  }
   const file = new File([viewerBlob], viewerMeta.fileName || 'manual', { type: viewerMeta.fileType || viewerBlob.type || 'application/octet-stream' });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try { await navigator.share({ files: [file], title: viewerMeta.title }); return; }
@@ -1105,7 +1158,15 @@ langSelect.onchange = () => {
 
 async function init() {
   applyLanguage();
-  if ('BarcodeDetector' in window && navigator.mediaDevices?.getUserMedia) {
+  if (NATIVE) {
+    $('#scanBtn').hidden = false;
+    $('#scanBtn').onclick = async () => {
+      const v = (await nativeWait((cb) => NATIVE.scan(t('scan.tip'), cb))).trim();
+      if (!v) return;
+      $('#q').value = v;
+      renderSearch();
+    };
+  } else if ('BarcodeDetector' in window && navigator.mediaDevices?.getUserMedia) {
     $('#scanBtn').hidden = false;
     $('#scanBtn').onclick = startScan;
   }
@@ -1119,7 +1180,8 @@ async function init() {
     toast(t('db.err', { e: err.message || err }), 5000);
   }
   refresh();
-  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  // APK 的文件本來就在安裝包裡，不需要離線緩存
+  if (!NATIVE && 'serviceWorker' in navigator && location.protocol !== 'file:') {
     navigator.serviceWorker.register('sw.js').catch((e) => console.warn('SW', e));
   }
 }

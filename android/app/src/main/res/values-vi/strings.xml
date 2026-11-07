@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Sổ tay sửa chữa</string>
+    <string name="share_title">Mở bằng / chia sẻ</string>
+    <string name="no_app">Không có ứng dụng mở được tệp này</string>
+</resources>

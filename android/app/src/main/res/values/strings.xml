@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Repair Manuals</string>
+    <string name="share_title">Open with / share</string>
+    <string name="no_app">No app can open this file</string>
+</resources>

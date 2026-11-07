@@ -2,3 +2,6 @@
 *.png binary
 *.bcmap binary
 *.pfb binary
+*.bat text eol=crlf
+*.jar binary
+*.jks binary

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- DayNight 主題讓 WebView 的 prefers-color-scheme 跟隨系統深色模式 -->
+    <style name="AppTheme" parent="@android:style/Theme.DeviceDefault.DayNight">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:statusBarColor">@color/primary</item>
+        <item name="android:windowLightStatusBar">@bool/light_bars</item>
+        <item name="android:navigationBarColor">@color/surface</item>
+        <item name="android:windowLightNavigationBar">@bool/light_nav</item>
+    </style>
+</resources>

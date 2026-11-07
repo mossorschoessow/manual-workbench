@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 與 style.css 的 primary、bg、surface 顏色一致 -->
+    <color name="primary">#0F6B5C</color>
+    <color name="bg">#F3F5F4</color>
+    <color name="surface">#FFFFFF</color>
+    <bool name="light_bars">false</bool>
+    <bool name="light_nav">true</bool>
+</resources>

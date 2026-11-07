@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">修理マニュアル</string>
+    <string name="share_title">他のアプリで開く / 共有</string>
+    <string name="no_app">このファイルを開けるアプリがありません</string>
+</resources>

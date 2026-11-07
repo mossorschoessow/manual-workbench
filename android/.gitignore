@@ -1,0 +1,10 @@
+.gradle/
+build/
+app/build/
+local.properties
+.idea/
+*.iml
+# 簽名金鑰絕不能提交（倉庫是公開的）
+keystore.properties
+*.jks
+*.keystore
