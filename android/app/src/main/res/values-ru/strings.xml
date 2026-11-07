@@ -3,4 +3,5 @@
     <string name="app_name">Руководства</string>
     <string name="share_title">Открыть в / поделиться</string>
     <string name="no_app">Нет приложения для этого файла</string>
+    <string name="pick_image">Добавить фото</string>
 </resources>

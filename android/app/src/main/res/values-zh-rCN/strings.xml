@@ -3,4 +3,5 @@
     <string name="app_name">维修手册</string>
     <string name="share_title">用其他应用打开 / 分享</string>
     <string name="no_app">没有可以打开这个文件的应用</string>
+    <string name="pick_image">添加图片</string>
 </resources>

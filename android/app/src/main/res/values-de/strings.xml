@@ -3,4 +3,5 @@
     <string name="app_name">Handbücher</string>
     <string name="share_title">Öffnen mit / teilen</string>
     <string name="no_app">Keine App kann diese Datei öffnen</string>
+    <string name="pick_image">Fotos hinzufügen</string>
 </resources>

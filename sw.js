@@ -1,6 +1,6 @@
 /* 離線緩存：應用外殼預先緩存，其餘（cmaps、字體）首次使用時緩存。
  * 更新應用文件後，把 CACHE 版本號 +1，手機下次聯網打開時自動更新。 */
-const CACHE = 'manual-workbench-v4';
+const CACHE = 'manual-workbench-v5';
 const SHELL = [
   './',
   'index.html',

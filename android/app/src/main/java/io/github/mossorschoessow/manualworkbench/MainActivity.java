@@ -1,5 +1,6 @@
 package io.github.mossorschoessow.manualworkbench;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
@@ -13,6 +14,7 @@ import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Parcelable;
+import android.provider.MediaStore;
 import android.text.InputType;
 import android.util.Base64;
 import android.webkit.JavascriptInterface;
@@ -64,9 +66,13 @@ public class MainActivity extends Activity {
     private static final String START_URL = "https://" + HOST + "/index.html";
     private static final int REQ_PICK = 1;
     private static final int REQ_SAVE = 2;
+    private static final int REQ_CAMERA_PERM = 3;
 
     private WebView web;
     private ValueCallback<Uri[]> pickCallback;
+    private Intent pendingPick;
+    private File cameraFile;
+    private Uri cameraUri;
     private File pendingSaveFile;
     private String pendingSaveCb;
     private String pendingScanCb;
@@ -172,13 +178,17 @@ public class MainActivity extends Activity {
             String[] mimes = acceptMimes(params.getAcceptTypes());
             if (mimes != null) i.putExtra(Intent.EXTRA_MIME_TYPES, mimes);
             if (params.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE) i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-            try {
-                startActivityForResult(i, REQ_PICK);
-            } catch (ActivityNotFoundException e) {
-                pickCallback = null;
-                return false;
+            // 只要圖片時（維修經驗的「添加圖片」），在選擇面板裡加上「拍照」
+            if (onlyImages(mimes) && getPackageManager().hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)) {
+                if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                    return launchPicker(i, true);
+                }
+                // 應用聲明了相機權限（掃碼用），系統要求授權後才能調用相機拍照
+                pendingPick = i;
+                requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_CAMERA_PERM);
+                return true;
             }
-            return true;
+            return launchPicker(i, false);
         }
 
         // 不用系統默認對話框：它的標題會顯示網址
@@ -218,6 +228,61 @@ public class MainActivity extends Activity {
         }
     }
 
+    private static boolean onlyImages(String[] mimes) {
+        if (mimes == null || mimes.length == 0) return false;
+        for (String m : mimes) if (!m.startsWith("image/")) return false;
+        return true;
+    }
+
+    /** 打開選文件；withCamera 時用系統選擇面板，並把相機放在最前面 */
+    private boolean launchPicker(Intent pick, boolean withCamera) {
+        cameraFile = null;
+        cameraUri = null;
+        Intent toStart = pick;
+        if (withCamera) {
+            try {
+                File dir = new File(outDir(), "cam");
+                if (!dir.isDirectory() && !dir.mkdirs()) throw new IOException("cannot create " + dir);
+                cameraFile = new File(dir, "photo_" + System.currentTimeMillis() + ".jpg");
+                cameraUri = FileProvider.getUriForFile(this, getPackageName() + ".files", cameraFile);
+                Intent cam = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+                cam.putExtra(MediaStore.EXTRA_OUTPUT, cameraUri);
+                cam.setClipData(ClipData.newRawUri("", cameraUri));
+                cam.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                if (cam.resolveActivity(getPackageManager()) != null) {
+                    toStart = Intent.createChooser(pick, getString(R.string.pick_image));
+                    toStart.putExtra(Intent.EXTRA_INITIAL_INTENTS, new Intent[]{cam});
+                } else {
+                    cameraFile = null;
+                    cameraUri = null;
+                }
+            } catch (Exception e) {
+                cameraFile = null;
+                cameraUri = null;
+            }
+        }
+        try {
+            startActivityForResult(toStart, REQ_PICK);
+            return true;
+        } catch (ActivityNotFoundException e) {
+            if (pickCallback != null) pickCallback.onReceiveValue(null);
+            pickCallback = null;
+            return false;
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        if (requestCode == REQ_CAMERA_PERM && pendingPick != null) {
+            Intent pick = pendingPick;
+            pendingPick = null;
+            boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+            launchPicker(pick, granted); // 拒絕授權時仍可從相冊 / 文件選
+            return;
+        }
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+    }
+
     /** accept=".manlib" 這類系統不認識的擴展名就不過濾，讓用戶自己選。 */
     private static String[] acceptMimes(String[] accept) {
         if (accept == null) return null;
@@ -249,6 +314,16 @@ public class MainActivity extends Activity {
                     result = new Uri[]{data.getData()};
                 }
             }
+            // 拍照時相機把照片寫進我們提供的文件，通常不回傳 data
+            if (result == null && resultCode == RESULT_OK && cameraFile != null && cameraFile.length() > 0) {
+                result = new Uri[]{cameraUri};
+            }
+            if (result == null && cameraFile != null) {
+                //noinspection ResultOfMethodCallIgnored
+                cameraFile.delete();
+            }
+            cameraFile = null;
+            cameraUri = null;
             pickCallback.onReceiveValue(result);
             pickCallback = null;
             return;

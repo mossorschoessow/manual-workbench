@@ -91,6 +91,10 @@ DICT['zh-Hant'] = {
   'exp.saved': '經驗已保存', 'exp.deleted': '經驗已刪除', 'exp.delete': '刪除這條經驗',
   'exp.delConfirm': '刪除這條經驗？此操作無法撤銷。', 'home.recentExp': '最近記錄的經驗', 'set.expCount': '維修經驗',
   'set.expCountVal': '{n} 條', 'edit.delConfirmExp': '確定刪除「{t}」及其 {n} 條維修經驗？此操作無法撤銷。',
+  'exp.images': '圖片', 'exp.addImage': '添加圖片', 'exp.imgHint': '可拍照或從相冊選擇，最多 {n} 張，會自動壓縮。',
+  'exp.imgMax': '最多只能添加 {n} 張圖片', 'exp.imgFail': '有 {n} 張圖片無法讀取', 'exp.imgProcessing': '正在處理圖片…',
+  'exp.imgRemove': '移除圖片', 'img.open': '查看大圖', 'img.close': '關閉',
+  'img.prev': '上一張', 'img.next': '下一張', 'img.tip': '左右滑動切換，雙擊放大',
   'db.err': '無法打開本機資料庫：{e}',
 };
 
@@ -166,6 +170,10 @@ DICT['zh-Hans'] = {
   'exp.saved': '经验已保存', 'exp.deleted': '经验已删除', 'exp.delete': '删除这条经验',
   'exp.delConfirm': '删除这条经验？此操作无法撤销。', 'home.recentExp': '最近记录的经验', 'set.expCount': '维修经验',
   'set.expCountVal': '{n} 条', 'edit.delConfirmExp': '确定删除“{t}”及其 {n} 条维修经验？此操作无法撤销。',
+  'exp.images': '图片', 'exp.addImage': '添加图片', 'exp.imgHint': '可拍照或从相册选择，最多 {n} 张，会自动压缩。',
+  'exp.imgMax': '最多只能添加 {n} 张图片', 'exp.imgFail': '有 {n} 张图片无法读取', 'exp.imgProcessing': '正在处理图片…',
+  'exp.imgRemove': '移除图片', 'img.open': '查看大图', 'img.close': '关闭',
+  'img.prev': '上一张', 'img.next': '下一张', 'img.tip': '左右滑动切换，双击放大',
   'db.err': '无法打开本机数据库：{e}',
 };
 
@@ -245,6 +253,10 @@ DICT.en = {
   'exp.saved': 'Note saved', 'exp.deleted': 'Note deleted', 'exp.delete': 'Delete this note',
   'exp.delConfirm': 'Delete this note? This cannot be undone.', 'home.recentExp': 'Recent repair notes', 'set.expCount': 'Repair notes',
   'set.expCountVal': '{n}', 'edit.delConfirmExp': { one: 'Delete “{t}” and its {n} repair note? This cannot be undone.', other: 'Delete “{t}” and its {n} repair notes? This cannot be undone.' },
+  'exp.images': 'Photos', 'exp.addImage': 'Add photos', 'exp.imgHint': 'Take a photo or pick from the gallery. Up to {n}, compressed automatically.',
+  'exp.imgMax': 'You can add up to {n} photos', 'exp.imgFail': { one: '{n} photo couldn’t be read', other: '{n} photos couldn’t be read' }, 'exp.imgProcessing': 'Processing…',
+  'exp.imgRemove': 'Remove photo', 'img.open': 'View photo', 'img.close': 'Close',
+  'img.prev': 'Previous', 'img.next': 'Next', 'img.tip': 'Swipe to switch, double-tap to zoom',
   'db.err': 'Can’t open the local database: {e}',
 };
 
@@ -320,6 +332,10 @@ DICT.ja = {
   'exp.saved': '保存しました', 'exp.deleted': '削除しました', 'exp.delete': 'このノウハウを削除',
   'exp.delConfirm': 'このノウハウを削除しますか？元に戻せません。', 'home.recentExp': '最近のノウハウ', 'set.expCount': '修理ノウハウ',
   'set.expCountVal': '{n} 件', 'edit.delConfirmExp': '「{t}」と修理ノウハウ {n} 件を削除しますか？元に戻せません。',
+  'exp.images': '画像', 'exp.addImage': '画像を追加', 'exp.imgHint': '撮影またはアルバムから選択。最大 {n} 枚、自動で圧縮されます。',
+  'exp.imgMax': '画像は最大 {n} 枚までです', 'exp.imgFail': '{n} 枚の画像を読み込めませんでした', 'exp.imgProcessing': '画像を処理中…',
+  'exp.imgRemove': '画像を削除', 'img.open': '拡大表示', 'img.close': '閉じる',
+  'img.prev': '前へ', 'img.next': '次へ', 'img.tip': '左右にスワイプで切替、ダブルタップで拡大',
   'db.err': 'ローカルデータベースを開けません：{e}',
 };
 
@@ -395,6 +411,10 @@ DICT.ko = {
   'exp.saved': '저장했습니다', 'exp.deleted': '삭제했습니다', 'exp.delete': '이 노하우 삭제',
   'exp.delConfirm': '이 노하우를 삭제할까요? 되돌릴 수 없습니다.', 'home.recentExp': '최근 기록한 노하우', 'set.expCount': '수리 노하우',
   'set.expCountVal': '{n}건', 'edit.delConfirmExp': '“{t}”와 수리 노하우 {n}건을 삭제할까요? 되돌릴 수 없습니다.',
+  'exp.images': '사진', 'exp.addImage': '사진 추가', 'exp.imgHint': '촬영하거나 앨범에서 선택하세요. 최대 {n}장, 자동으로 압축됩니다.',
+  'exp.imgMax': '사진은 최대 {n}장까지 추가할 수 있습니다', 'exp.imgFail': '사진 {n}장을 읽을 수 없습니다', 'exp.imgProcessing': '사진 처리 중…',
+  'exp.imgRemove': '사진 제거', 'img.open': '크게 보기', 'img.close': '닫기',
+  'img.prev': '이전', 'img.next': '다음', 'img.tip': '좌우로 밀어 전환, 두 번 탭하여 확대',
   'db.err': '로컬 데이터베이스를 열 수 없습니다: {e}',
 };
 
@@ -470,6 +490,10 @@ DICT.es = {
   'exp.saved': 'Nota guardada', 'exp.deleted': 'Nota eliminada', 'exp.delete': 'Eliminar esta nota',
   'exp.delConfirm': '¿Eliminar esta nota? No se puede deshacer.', 'home.recentExp': 'Notas recientes', 'set.expCount': 'Notas de reparación',
   'set.expCountVal': '{n}', 'edit.delConfirmExp': '¿Eliminar «{t}» y sus notas de reparación ({n})? No se puede deshacer.',
+  'exp.images': 'Fotos', 'exp.addImage': 'Añadir fotos', 'exp.imgHint': 'Haz una foto o elige de la galería. Máximo {n}; se comprimen automáticamente.',
+  'exp.imgMax': 'Máximo {n} fotos', 'exp.imgFail': 'No se pudieron leer {n} fotos', 'exp.imgProcessing': 'Procesando…',
+  'exp.imgRemove': 'Quitar foto', 'img.open': 'Ver foto', 'img.close': 'Cerrar',
+  'img.prev': 'Anterior', 'img.next': 'Siguiente', 'img.tip': 'Desliza para cambiar, toca dos veces para ampliar',
   'db.err': 'No se puede abrir la base de datos local: {e}',
 };
 
@@ -545,6 +569,10 @@ DICT.fr = {
   'exp.saved': 'Note enregistrée', 'exp.deleted': 'Note supprimée', 'exp.delete': 'Supprimer cette note',
   'exp.delConfirm': 'Supprimer cette note ? Cette action est irréversible.', 'home.recentExp': 'Notes récentes', 'set.expCount': 'Notes de réparation',
   'set.expCountVal': '{n}', 'edit.delConfirmExp': 'Supprimer « {t} » et ses notes de réparation ({n}) ? Cette action est irréversible.',
+  'exp.images': 'Photos', 'exp.addImage': 'Ajouter des photos', 'exp.imgHint': 'Prenez une photo ou choisissez dans la galerie. {n} au maximum, compressées automatiquement.',
+  'exp.imgMax': '{n} photos au maximum', 'exp.imgFail': 'Impossible de lire {n} photo(s)', 'exp.imgProcessing': 'Traitement…',
+  'exp.imgRemove': 'Retirer la photo', 'img.open': 'Voir la photo', 'img.close': 'Fermer',
+  'img.prev': 'Précédente', 'img.next': 'Suivante', 'img.tip': 'Balayez pour changer, touchez deux fois pour zoomer',
   'db.err': 'Impossible d’ouvrir la base de données locale : {e}',
 };
 
@@ -620,6 +648,10 @@ DICT.de = {
   'exp.saved': 'Notiz gespeichert', 'exp.deleted': 'Notiz gelöscht', 'exp.delete': 'Diese Notiz löschen',
   'exp.delConfirm': 'Diese Notiz löschen? Dies kann nicht rückgängig gemacht werden.', 'home.recentExp': 'Neueste Notizen', 'set.expCount': 'Reparaturnotizen',
   'set.expCountVal': '{n}', 'edit.delConfirmExp': '„{t}“ samt Reparaturnotizen ({n}) löschen? Dies kann nicht rückgängig gemacht werden.',
+  'exp.images': 'Fotos', 'exp.addImage': 'Fotos hinzufügen', 'exp.imgHint': 'Foto aufnehmen oder aus der Galerie wählen. Höchstens {n}, wird automatisch verkleinert.',
+  'exp.imgMax': 'Höchstens {n} Fotos möglich', 'exp.imgFail': '{n} Foto(s) konnten nicht gelesen werden', 'exp.imgProcessing': 'Wird verarbeitet…',
+  'exp.imgRemove': 'Foto entfernen', 'img.open': 'Foto ansehen', 'img.close': 'Schließen',
+  'img.prev': 'Zurück', 'img.next': 'Weiter', 'img.tip': 'Wischen zum Wechseln, doppelt tippen zum Zoomen',
   'db.err': 'Lokale Datenbank kann nicht geöffnet werden: {e}',
 };
 
@@ -695,6 +727,10 @@ DICT.ru = {
   'exp.saved': 'Запись сохранена', 'exp.deleted': 'Запись удалена', 'exp.delete': 'Удалить запись',
   'exp.delConfirm': 'Удалить эту запись? Отменить будет нельзя.', 'home.recentExp': 'Недавние записи о ремонте', 'set.expCount': 'Записи о ремонте',
   'set.expCountVal': '{n}', 'edit.delConfirmExp': 'Удалить «{t}» вместе с записями о ремонте ({n})? Отменить будет нельзя.',
+  'exp.images': 'Фото', 'exp.addImage': 'Добавить фото', 'exp.imgHint': 'Сделайте снимок или выберите из галереи. Не больше {n}, сжимаются автоматически.',
+  'exp.imgMax': 'Можно добавить не больше {n} фото', 'exp.imgFail': 'Не удалось прочитать фото: {n}', 'exp.imgProcessing': 'Обработка…',
+  'exp.imgRemove': 'Убрать фото', 'img.open': 'Открыть фото', 'img.close': 'Закрыть',
+  'img.prev': 'Назад', 'img.next': 'Вперёд', 'img.tip': 'Листайте для переключения, двойное касание — увеличить',
   'db.err': 'Не удаётся открыть локальную базу данных: {e}',
 };
 
@@ -770,6 +806,10 @@ DICT.vi = {
   'exp.saved': 'Đã lưu', 'exp.deleted': 'Đã xóa', 'exp.delete': 'Xóa kinh nghiệm này',
   'exp.delConfirm': 'Xóa kinh nghiệm này? Không thể hoàn tác.', 'home.recentExp': 'Kinh nghiệm ghi gần đây', 'set.expCount': 'Kinh nghiệm sửa chữa',
   'set.expCountVal': '{n}', 'edit.delConfirmExp': 'Xóa “{t}” cùng {n} kinh nghiệm sửa chữa? Không thể hoàn tác.',
+  'exp.images': 'Hình ảnh', 'exp.addImage': 'Thêm ảnh', 'exp.imgHint': 'Chụp ảnh hoặc chọn từ thư viện. Tối đa {n} ảnh, tự động nén.',
+  'exp.imgMax': 'Chỉ thêm được tối đa {n} ảnh', 'exp.imgFail': 'Không đọc được {n} ảnh', 'exp.imgProcessing': 'Đang xử lý ảnh…',
+  'exp.imgRemove': 'Bỏ ảnh', 'img.open': 'Xem ảnh lớn', 'img.close': 'Đóng',
+  'img.prev': 'Ảnh trước', 'img.next': 'Ảnh sau', 'img.tip': 'Vuốt để chuyển, chạm hai lần để phóng to',
   'db.err': 'Không thể mở cơ sở dữ liệu cục bộ: {e}',
 };
 

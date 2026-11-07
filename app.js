@@ -48,13 +48,14 @@ async function nativeFile(blob, name, mime, action) {
  * files:   文件本體 Blob（打開時才讀取）
  * kv:      最近查看、收藏等
  * exps:    維修經驗（1.3.0 起；按 manualId 歸屬到手冊，常駐記憶體）
+ * expimgs: 經驗裡的圖片 { id, blob, thumb, w, h }（壓縮後的原圖 + 縮略圖，用到時才讀取）
  * ========================================================= */
 const DB_NAME = 'manual-workbench';
 let dbPromise;
 function openDB() {
   if (!dbPromise) {
     dbPromise = new Promise((resolve, reject) => {
-      const r = indexedDB.open(DB_NAME, 2);
+      const r = indexedDB.open(DB_NAME, 3);
       r.onupgradeneeded = (e) => {
         const db = r.result;
         if (e.oldVersion < 1) {
@@ -63,6 +64,7 @@ function openDB() {
           db.createObjectStore('kv');
         }
         if (e.oldVersion < 2) db.createObjectStore('exps', { keyPath: 'id' });
+        if (e.oldVersion < 3) db.createObjectStore('expimgs', { keyPath: 'id' });
       };
       r.onsuccess = () => {
         // 另一個分頁升級資料庫時讓出連接，避免它被卡住
@@ -95,17 +97,34 @@ const store = {
     if (blob) t.objectStore('files').put({ id: meta.id, blob });
     return txDone(t);
   },
-  async remove(id, expIds = []) {
+  async remove(id, expIds = [], imgIds = []) {
     const db = await openDB();
-    const t = db.transaction(['manuals', 'files', 'exps'], 'readwrite');
+    const t = db.transaction(['manuals', 'files', 'exps', 'expimgs'], 'readwrite');
     t.objectStore('manuals').delete(id);
     t.objectStore('files').delete(id);
     for (const x of expIds) t.objectStore('exps').delete(x);
+    for (const x of imgIds) t.objectStore('expimgs').delete(x);
     return txDone(t);
   },
   async allExps() { const db = await openDB(); return reqP(db.transaction('exps').objectStore('exps').getAll()); },
-  async putExp(x) { const db = await openDB(); const t = db.transaction('exps', 'readwrite'); t.objectStore('exps').put(x); return txDone(t); },
-  async removeExp(id) { const db = await openDB(); const t = db.transaction('exps', 'readwrite'); t.objectStore('exps').delete(id); return txDone(t); },
+  /** 保存一條經驗，同時寫入新圖片、刪除被移除的圖片（同一個事務，要麼全成功要麼全不寫） */
+  async putExp(x, addImgs = [], delImgIds = []) {
+    const db = await openDB();
+    const t = db.transaction(['exps', 'expimgs'], 'readwrite');
+    t.objectStore('exps').put(x);
+    for (const im of addImgs) t.objectStore('expimgs').put(im);
+    for (const id of delImgIds) t.objectStore('expimgs').delete(id);
+    return txDone(t);
+  },
+  async removeExp(id, imgIds = []) {
+    const db = await openDB();
+    const t = db.transaction(['exps', 'expimgs'], 'readwrite');
+    t.objectStore('exps').delete(id);
+    for (const x of imgIds) t.objectStore('expimgs').delete(x);
+    return txDone(t);
+  },
+  async img(id) { const db = await openDB(); return reqP(db.transaction('expimgs').objectStore('expimgs').get(id)); },
+  async putImg(im) { const db = await openDB(); const t = db.transaction('expimgs', 'readwrite'); t.objectStore('expimgs').put(im); return txDone(t); },
   async get(k) { const db = await openDB(); return reqP(db.transaction('kv').objectStore('kv').get(k)); },
   async set(k, v) { const db = await openDB(); const t = db.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); return txDone(t); },
 };
@@ -325,7 +344,7 @@ function renderHome() {
   $('#recentExpList').innerHTML = recExp.map((x) => `<button type="button" class="exp-row" data-exps="${x.manualId}" data-exp-focus="${x.id}">
       <span class="exp-row-top">${resultTag(x.result)}<b>${esc(x.item)}</b></span>
       <span class="exp-row-text">${esc(x.content)}</span>
-      <span class="exp-row-sub">${esc(byId.get(x.manualId).title)} · ${fmtDate(x.date)}</span>
+      <span class="exp-row-sub">${esc(byId.get(x.manualId).title)} · ${fmtDate(x.date)}${imgCount(x) ? ` · ${IMG_ICON}${imgCount(x)}` : ''}</span>
     </button>`).join('');
 }
 
@@ -532,7 +551,9 @@ $('#deleteBtn').onclick = async () => {
   const id = editing.id;
   const expIds = (expsByManual.get(id) || []).map((x) => x.id);
   if (!confirm(expIds.length ? t('edit.delConfirmExp', { t: editing.title, n: expIds.length }) : t('edit.delConfirm', { t: editing.title }))) return;
-  await store.remove(id, expIds);
+  const imgIds = (expsByManual.get(id) || []).flatMap((x) => x.images || []);
+  await store.remove(id, expIds, imgIds);
+  imgIds.forEach(dropThumb);
   setManuals(manuals.filter((x) => x.id !== id));
   setExps(exps.filter((x) => x.manualId !== id));
   favs.delete(id);
@@ -601,10 +622,20 @@ $('#exportBtn').onclick = async () => {
       blobs.push(blob);
       offset += blob.size;
     }
-    // version 2 起加入 exps；舊版應用恢復時會忽略這個欄位，仍能恢復手冊
+    // version 2 起加入 exps，version 3 起加入經驗圖片；舊版應用恢復時會忽略不認識的欄位，仍能恢復手冊
     const saved = new Set(entries.map((en) => en.meta.id));
     const backupExps = exps.filter((x) => saved.has(x.manualId));
-    const header = new TextEncoder().encode(JSON.stringify({ app: 'manual-workbench', version: 2, exportedAt: Date.now(), entries, exps: backupExps }));
+    const images = [];
+    for (const x of backupExps) {
+      for (const id of x.images || []) {
+        const im = await store.img(id);
+        if (!im) continue;
+        images.push({ id, w: im.w, h: im.h, offset, size: im.blob.size, thumbOffset: offset + im.blob.size, thumbSize: im.thumb.size });
+        blobs.push(im.blob, im.thumb);
+        offset += im.blob.size + im.thumb.size;
+      }
+    }
+    const header = new TextEncoder().encode(JSON.stringify({ app: 'manual-workbench', version: 3, exportedAt: Date.now(), entries, exps: backupExps, images }));
     const len = String(header.length).padStart(12, '0');
     const out = new Blob([MAGIC, len, header, ...blobs], { type: 'application/octet-stream' });
     const fileName = `${t('set.backupFile')}_${fmtDate(Date.now())}.manlib`;
@@ -659,6 +690,17 @@ $('#importInput').onchange = async (e) => {
       list.set(meta.id, withNorm(meta));
     }
     setManuals([...list.values()]);
+    if (Array.isArray(header.images)) {
+      for (const im of header.images) {
+        const at = (o, n) => file.slice(start + o, start + o + n).arrayBuffer();
+        await store.putImg({
+          id: im.id, w: im.w, h: im.h,
+          blob: new Blob([await at(im.offset, im.size)], { type: 'image/jpeg' }),
+          thumb: new Blob([await at(im.thumbOffset, im.thumbSize)], { type: 'image/jpeg' }),
+        });
+        dropThumb(im.id);
+      }
+    }
     if (Array.isArray(header.exps)) {
       const merged = new Map(exps.map((x) => [x.id, x]));
       for (const x of header.exps) {
@@ -1228,12 +1270,14 @@ function renderExps(focus) {
         <div class="exp-meta">${resultTag(x.result)}<span>${fmtDate(x.date)}</span>${x.author ? `<span>${esc(x.author)}</span>` : ''}
           <button type="button" class="icon-btn" data-exp-edit="${x.id}" aria-label="${esc(t('exp.edit'))}"><svg class="ico" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button>
         </div>
-        <div class="exp-text">${markText(x.content, raw)}</div>
+        ${x.content ? `<div class="exp-text">${markText(x.content, raw)}</div>` : ''}
+        ${imgCount(x) ? `<div class="exp-imgs">${x.images.map((id, i) => `<button type="button" class="exp-img" data-img-view="${x.id}" data-img-idx="${i}" aria-label="${esc(t('img.open'))}"><img data-thumb="${id}" alt=""></button>`).join('')}</div>` : ''}
       </article>`).join('')}
       <button type="button" class="btn sm ghost exp-more" data-exp-add="${esc(g.name)}">+ ${esc(t('exp.addMore'))}</button>
     </section>`);
   }
   body.innerHTML = html.length ? html.join('') : `<div class="empty"><p class="muted">${esc(t('exp.noMatch', { q: raw }))}</p></div>`;
+  hydrateThumbs(body);
   if (focus) {
     const el = body.querySelector(`[data-exp-id="${focus}"]`);
     if (el) requestAnimationFrame(() => el.scrollIntoView({ block: 'center' }));
@@ -1261,7 +1305,11 @@ function openExpEditor(x, item = '') {
   for (const e of expsByManual.get(expManual.id) || []) if (!names.has(itemKey(e.item))) names.set(itemKey(e.item), e.item);
   $('#expItemList').innerHTML = [...names.values()].map((v) => `<option value="${esc(v)}">`).join('');
   $('#xDelete').hidden = !x;
-  openOverlay($('#expEdit'));
+  releaseNewImgs();
+  xImgs = (x && x.images ? x.images : []).map((id) => ({ id }));
+  $('#xImgHint').textContent = t('exp.imgHint', { n: IMG_LIMIT });
+  renderXImgs();
+  openOverlay($('#expEdit'), releaseNewImgs);
 }
 
 $('#expForm').onsubmit = async (e) => {
@@ -1270,7 +1318,8 @@ $('#expForm').onsubmit = async (e) => {
   const content = $('#xContent').value.trim();
   $('#xItem').closest('.field').classList.toggle('invalid', !item);
   $('#xContent').closest('.field').classList.toggle('invalid', !content);
-  if (!item || !content) { toast(t('exp.required')); return; }
+  if (xImgBusy) return;
+  if (!item || (!content && !xImgs.length)) { toast(t('exp.required')); return; }
   // 同一項目沿用已有的寫法，避免「E03堵塞」「e03 堵塞」分成兩組
   const same = (expsByManual.get(expManual.id) || []).find((x) => x !== expEditing && itemKey(x.item) === itemKey(item));
   const [y, mo, d] = $('#xDate').value.split('-').map(Number);
@@ -1284,12 +1333,18 @@ $('#expForm').onsubmit = async (e) => {
     content,
     date,
     author: $('#xAuthor').value.trim(),
+    images: xImgs.map((im) => im.id),
     updatedAt: now,
   };
+  const addImgs = xImgs.filter((im) => im.blob).map(({ id, blob, thumb, w, h }) => ({ id, blob, thumb, w, h }));
+  const delImgIds = ((expEditing && expEditing.images) || []).filter((id) => !rec.images.includes(id));
   const btn = $('#expSaveBtn');
   btn.disabled = true;
   try {
-    await store.putExp(rec);
+    await store.putExp(rec, addImgs, delImgIds);
+    // 新圖片的縮略圖 URL 交給緩存繼續用；被移除的圖片釋放掉
+    for (const im of xImgs) if (im.blob) { thumbUrls.set(im.id, im.url); im.blob = null; }
+    delImgIds.forEach(dropThumb);
     setExps(exps.filter((x) => x.id !== rec.id).concat(rec));
     try { localStorage.setItem('expAuthor', rec.author); } catch { /* ignore */ }
     requestPersist();
@@ -1310,7 +1365,9 @@ $('#expForm').onsubmit = async (e) => {
 $('#xDelete').onclick = async () => {
   if (!expEditing || !confirm(t('exp.delConfirm'))) return;
   const id = expEditing.id;
-  await store.removeExp(id);
+  const imgIds = expEditing.images || [];
+  await store.removeExp(id, imgIds);
+  imgIds.forEach(dropThumb);
   setExps(exps.filter((x) => x.id !== id));
   closeOverlay();
   renderExps();
@@ -1319,6 +1376,160 @@ $('#xDelete').onclick = async () => {
   toast(t('exp.deleted'));
 };
 $('#vExpBtn').onclick = () => { if (viewerMeta) openExps(viewerMeta.id); };
+
+/* ---------- 經驗圖片 ----------
+ * 選進來的照片先壓縮（長邊 1600px 的 JPEG + 360px 縮略圖），手機拍的幾 MB 照片一般會變成 200–400 KB。
+ * 新圖片在點「保存」之前只放在記憶體裡，取消編輯就丟掉。 */
+const IMG_LIMIT = 9, IMG_MAX = 1600, THUMB_MAX = 360;
+const IMG_ICON = '<svg class="ico tiny" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m21 16-5-5-8 8"/></svg>';
+const imgCount = (x) => (x.images ? x.images.length : 0);
+const thumbUrls = new Map(); // 圖片 id → 縮略圖 object URL
+let xImgs = [];              // 編輯中的圖片 [{ id, blob?, thumb?, url? }]，有 blob 的是還沒保存的新圖片
+let xImgBusy = false;
+
+function dropThumb(id) {
+  const u = thumbUrls.get(id);
+  if (u) { URL.revokeObjectURL(u); thumbUrls.delete(id); }
+}
+async function thumbUrl(id) {
+  if (thumbUrls.has(id)) return thumbUrls.get(id);
+  const im = await store.img(id);
+  if (!im) return null;
+  const u = URL.createObjectURL(im.thumb);
+  thumbUrls.set(id, u);
+  return u;
+}
+function hydrateThumbs(root) {
+  root.querySelectorAll('img[data-thumb]').forEach(async (img) => {
+    const u = await thumbUrl(img.dataset.thumb);
+    if (u) img.src = u; else img.closest('.exp-img, .ximg')?.remove();
+  });
+}
+function releaseNewImgs() {
+  for (const im of xImgs) if (im.blob && im.url) URL.revokeObjectURL(im.url);
+  xImgs = xImgs.filter((im) => !im.blob);
+}
+
+async function decodeImage(file) {
+  try { return await createImageBitmap(file); } catch { /* 部分格式退回用 <img> 解碼 */ }
+  const url = URL.createObjectURL(file);
+  try { const img = new Image(); img.src = url; await img.decode(); return img; } finally { URL.revokeObjectURL(url); }
+}
+function scaleTo(src, max, quality) {
+  const w = src.width, h = src.height, k = Math.min(1, max / Math.max(w, h));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(w * k));
+  c.height = Math.max(1, Math.round(h * k));
+  const g = c.getContext('2d');
+  g.fillStyle = '#fff'; // 透明 PNG 轉 JPEG 時墊白底
+  g.fillRect(0, 0, c.width, c.height);
+  g.drawImage(src, 0, 0, c.width, c.height);
+  return new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error('encode failed'))), 'image/jpeg', quality));
+}
+async function prepImage(file) {
+  const src = await decodeImage(file);
+  try {
+    const blob = await scaleTo(src, IMG_MAX, 0.82);
+    const thumb = await scaleTo(src, THUMB_MAX, 0.72);
+    const k = Math.min(1, IMG_MAX / Math.max(src.width, src.height));
+    return { id: uid(), blob, thumb, w: Math.round(src.width * k), h: Math.round(src.height * k), url: URL.createObjectURL(thumb) };
+  } finally { if (src.close) src.close(); }
+}
+
+function renderXImgs() {
+  const box = $('#xImgs');
+  box.innerHTML = xImgs.map((im, i) => `<div class="ximg">
+      <button type="button" class="ximg-open" data-ximg-view="${i}" aria-label="${esc(t('img.open'))}"><img ${im.url ? `src="${im.url}"` : `data-thumb="${im.id}"`} alt=""></button>
+      <button type="button" class="ximg-del" data-ximg-del="${i}" aria-label="${esc(t('exp.imgRemove'))}"><svg class="ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>`).join('');
+  box.hidden = !xImgs.length;
+  hydrateThumbs(box);
+  $('#xAddImg').hidden = xImgs.length >= IMG_LIMIT;
+}
+$('#xAddImg').onclick = () => $('#xImgInput').click();
+$('#xImgInput').onchange = async (e) => {
+  const files = [...e.target.files];
+  e.target.value = '';
+  if (!files.length) return;
+  const room = IMG_LIMIT - xImgs.length;
+  if (files.length > room) toast(t('exp.imgMax', { n: IMG_LIMIT }), 3000);
+  const btn = $('#xAddImg');
+  xImgBusy = true;
+  btn.disabled = true;
+  $('#expSaveBtn').disabled = true;
+  let failed = 0;
+  for (const file of files.slice(0, Math.max(0, room))) {
+    btn.lastElementChild.textContent = t('exp.imgProcessing');
+    try { xImgs.push(await prepImage(file)); renderXImgs(); }
+    catch (err) { console.error(err); failed++; }
+  }
+  xImgBusy = false;
+  btn.disabled = false;
+  $('#expSaveBtn').disabled = false;
+  btn.lastElementChild.textContent = t('exp.addImage');
+  if (failed) toast(t('exp.imgFail', { n: failed }), 3500);
+};
+$('#xImgs').addEventListener('click', (e) => {
+  const del = e.target.closest('[data-ximg-del]');
+  if (del) {
+    const [im] = xImgs.splice(+del.dataset.ximgDel, 1);
+    if (im && im.blob && im.url) URL.revokeObjectURL(im.url);
+    renderXImgs();
+    return;
+  }
+  const v = e.target.closest('[data-ximg-view]');
+  if (v) openImgViewer(xImgs.map((im) => (im.blob ? { blob: im.blob } : { id: im.id })), +v.dataset.ximgView);
+});
+
+/* ---------- 全屏看圖：左右滑動切換，雙擊放大 ---------- */
+const IV = { items: [], i: 0, url: null, token: 0 };
+function openImgViewer(items, index) {
+  IV.items = items;
+  openOverlay($('#imgViewer'), () => { if (IV.url) URL.revokeObjectURL(IV.url); IV.url = null; $('#ivImg').removeAttribute('src'); });
+  showImg(index);
+}
+async function showImg(i) {
+  const n = IV.items.length;
+  if (!n) return;
+  IV.i = (i + n) % n;
+  const token = ++IV.token;
+  $('#ivBody').classList.remove('zoomed');
+  $('#ivCount').textContent = n > 1 ? `${IV.i + 1} / ${n}` : '';
+  $('#ivPrev').hidden = $('#ivNext').hidden = n < 2;
+  const it = IV.items[IV.i];
+  const blob = it.blob || (await store.img(it.id))?.blob;
+  if (token !== IV.token || !blob) return;
+  if (IV.url) URL.revokeObjectURL(IV.url);
+  IV.url = URL.createObjectURL(blob);
+  $('#ivImg').src = IV.url;
+}
+$('#ivPrev').onclick = () => showImg(IV.i - 1);
+$('#ivNext').onclick = () => showImg(IV.i + 1);
+$('#ivBody').addEventListener('dblclick', (e) => {
+  const body = $('#ivBody');
+  const zoomed = body.classList.toggle('zoomed');
+  if (zoomed) {
+    // 以點擊位置為中心放大
+    const r = body.getBoundingClientRect();
+    requestAnimationFrame(() => {
+      body.scrollLeft = (e.clientX - r.left) / r.width * body.scrollWidth - r.width / 2;
+      body.scrollTop = (e.clientY - r.top) / r.height * body.scrollHeight - r.height / 2;
+    });
+  }
+});
+let ivTouch = null;
+$('#ivBody').addEventListener('touchstart', (e) => { ivTouch = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null; }, { passive: true });
+$('#ivBody').addEventListener('touchend', (e) => {
+  if (!ivTouch || $('#ivBody').classList.contains('zoomed')) return;
+  const dx = e.changedTouches[0].clientX - ivTouch.x, dy = e.changedTouches[0].clientY - ivTouch.y;
+  if (Math.abs(dx) > 60 && Math.abs(dy) < 80) showImg(IV.i + (dx < 0 ? 1 : -1));
+  ivTouch = null;
+});
+document.addEventListener('keydown', (e) => {
+  if ($('#imgViewer').hidden) return;
+  if (e.key === 'ArrowLeft') showImg(IV.i - 1);
+  else if (e.key === 'ArrowRight') showImg(IV.i + 1);
+});
 
 /* =========================================================
  * 全局事件
@@ -1331,6 +1542,12 @@ document.addEventListener('click', (e) => {
   if (ed) { e.stopPropagation(); openEditor(byId.get(ed.dataset.edit)); return; }
   const ex = t.closest('[data-exps]');
   if (ex) { e.stopPropagation(); openExps(ex.dataset.exps, { q: ex.dataset.expsQ || '', focus: ex.dataset.expFocus || null }); return; }
+  const iv = t.closest('[data-img-view]');
+  if (iv) {
+    const x = exps.find((e2) => e2.id === iv.dataset.imgView);
+    if (x) openImgViewer(x.images.map((id) => ({ id })), +iv.dataset.imgIdx);
+    return;
+  }
   const xe = t.closest('[data-exp-edit]');
   if (xe) { openExpEditor(exps.find((x) => x.id === xe.dataset.expEdit)); return; }
   const xa = t.closest('[data-exp-add]');

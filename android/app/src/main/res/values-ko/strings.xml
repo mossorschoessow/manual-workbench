@@ -3,4 +3,5 @@
     <string name="app_name">수리 매뉴얼</string>
     <string name="share_title">다른 앱으로 열기 / 공유</string>
     <string name="no_app">이 파일을 열 수 있는 앱이 없습니다</string>
+    <string name="pick_image">사진 추가</string>
 </resources>
